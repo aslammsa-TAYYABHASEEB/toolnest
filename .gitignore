@@ -1,0 +1,55 @@
+# Dependencies
+/node_modules/
+
+# Next.js and local build output
+/.next/
+/out/
+/build/
+
+# Test and coverage output
+/coverage/
+/.nyc_output/
+
+# Environment files (keep the documented template)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+!.env.example
+
+# Package-manager and application logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript caches
+*.tsbuildinfo
+
+# Hosting and tool caches
+/.vercel/
+/.cache/
+/.turbo/
+/.agents/
+/.codex/
+
+# Local Codex working and delivery folders
+/work/
+/outputs/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+~$*
