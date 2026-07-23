@@ -1,4 +1,6 @@
 export const MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024;
+export const MAX_IMAGE_DIMENSION = 16_384;
+export const MAX_IMAGE_PIXEL_AREA = 64 * 1024 * 1024;
 
 export const IMAGE_FORMATS = {
   jpeg: { label: "JPG", mimeType: "image/jpeg", extension: "jpg", supportsQuality: true },
@@ -53,4 +55,17 @@ export type CompressedImage = ImageProcessResult & {
   savedBytes: number;
   savedPercentage: number;
   hasSavings: boolean;
+};
+
+export type ResizeOptions = {
+  file: File;
+  format: ImageFormat;
+  width: number;
+  height: number;
+  quality?: number;
+};
+
+export type ResizedImage = ImageProcessResult & {
+  originalWidth: number;
+  originalHeight: number;
 };

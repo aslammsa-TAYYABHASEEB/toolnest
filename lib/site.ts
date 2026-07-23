@@ -59,10 +59,10 @@ export const categories: Category[] = [
 ];
 
 export const tools: Tool[] = [
-  { name: "Merge PDF", description: "Combine multiple PDF files into one document.", category: "pdf-tools", icon: "M", popular: true },
+  { name: "PDF Merge", description: "Combine multiple PDF files privately in the order you choose.", category: "pdf-tools", icon: "M", popular: true, available: true, href: "/tools/pdf-merge" },
   { name: "Compress PDF", description: "Reduce PDF file size while keeping it readable.", category: "pdf-tools", icon: "C", popular: true },
   { name: "PDF to Word", description: "Prepare PDF documents for Word conversion.", category: "pdf-tools", icon: "W" },
-  { name: "Resize Image", description: "Set custom image dimensions in a few steps.", category: "image-tools", icon: "R" },
+  { name: "Image Resizer", description: "Resize JPG, PNG, and WebP images privately by pixels or percentage.", category: "image-tools", icon: "R", popular: true, available: true, href: "/tools/image-resizer" },
   { name: "Image Compressor", description: "Reduce JPG, PNG, and WebP file sizes privately in your browser.", category: "image-tools", icon: "C", popular: true, available: true, href: "/tools/image-compressor" },
   { name: "Image Converter", description: "Convert JPG, PNG, and WebP images privately in your browser.", category: "image-tools", icon: "↻", available: true, href: "/tools/image-converter" },
   { name: "Word Counter", description: "Count words, characters, sentences, and reading time.", category: "text-tools", icon: "W", popular: true },

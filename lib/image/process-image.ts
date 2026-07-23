@@ -3,6 +3,7 @@ import { ImageProcessingError } from "@/lib/image/errors";
 import {
   makeImageFilename,
   makeOutputFilename,
+  makeResizedFilename,
 } from "@/lib/image/filenames";
 import { loadImageBitmap } from "@/lib/image/load-image";
 import {
@@ -12,6 +13,10 @@ import {
   type ConversionOptions,
   type ConvertedImage,
   type ImageFormat,
+  MAX_IMAGE_DIMENSION,
+  MAX_IMAGE_PIXEL_AREA,
+  type ResizedImage,
+  type ResizeOptions,
 } from "@/lib/image/types";
 import { validateImageFile } from "@/lib/image/validation";
 
@@ -28,6 +33,33 @@ export function formatBytes(bytes: number) {
   );
   const value = bytes / 1024 ** exponent;
   return `${value.toFixed(exponent === 0 || value >= 10 ? 0 : 1)} ${units[exponent]}`;
+}
+
+export function validateOutputDimensions(width: number, height: number) {
+  if (
+    !Number.isInteger(width)
+    || !Number.isInteger(height)
+    || width <= 0
+    || height <= 0
+  ) {
+    throw new ImageProcessingError(
+      "invalid-dimensions",
+      "Width and height must be positive whole numbers.",
+    );
+  }
+
+  if (
+    width > MAX_IMAGE_DIMENSION
+    || height > MAX_IMAGE_DIMENSION
+    || width * height > MAX_IMAGE_PIXEL_AREA
+  ) {
+    throw new ImageProcessingError(
+      "dimensions-too-large",
+      `Choose dimensions no larger than ${MAX_IMAGE_DIMENSION.toLocaleString()} px per side and 64 megapixels in total.`,
+    );
+  }
+
+  return { width, height };
 }
 
 function canvasToBlob(
@@ -49,16 +81,20 @@ function canvasToBlob(
   });
 }
 
-async function encodeImage(
+export async function encodeImage(
   file: File,
   format: ImageFormat,
   quality?: number,
+  outputDimensions?: { width: number; height: number },
 ) {
   await validateImageFile(file);
   const bitmap = await loadImageBitmap(file);
 
   try {
-    const canvas = createImageCanvas(bitmap.width, bitmap.height);
+    const dimensions = outputDimensions
+      ? validateOutputDimensions(outputDimensions.width, outputDimensions.height)
+      : { width: bitmap.width, height: bitmap.height };
+    const canvas = createImageCanvas(dimensions.width, dimensions.height);
     const context = canvas.getContext("2d");
     if (!context) {
       throw new ImageProcessingError(
@@ -72,7 +108,7 @@ async function encodeImage(
       context.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    context.drawImage(bitmap, 0, 0);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
 
     const target = IMAGE_FORMATS[format];
     const blob = await canvasToBlob(
@@ -88,7 +124,13 @@ async function encodeImage(
       );
     }
 
-    return { blob, width: bitmap.width, height: bitmap.height };
+    return {
+      blob,
+      width: canvas.width,
+      height: canvas.height,
+      sourceWidth: bitmap.width,
+      sourceHeight: bitmap.height,
+    };
   } catch (error) {
     if (error instanceof Error) throw error;
     throw new ImageProcessingError(
@@ -100,6 +142,33 @@ async function encodeImage(
   }
 }
 
+export async function resizeImage({
+  file,
+  format,
+  width,
+  height,
+  quality = 0.9,
+}: ResizeOptions): Promise<ResizedImage> {
+  const encoded = await encodeImage(
+    file,
+    format,
+    quality,
+    validateOutputDimensions(width, height),
+  );
+
+  return {
+    blob: encoded.blob,
+    width: encoded.width,
+    height: encoded.height,
+    format,
+    filename: makeResizedFilename(file.name, width, height, format),
+    originalWidth: encoded.sourceWidth,
+    originalHeight: encoded.sourceHeight,
+    originalSize: file.size,
+    outputSize: encoded.blob.size,
+  };
+}
+
 export async function convertImage({
   file,
   format,
@@ -107,7 +176,9 @@ export async function convertImage({
 }: ConversionOptions): Promise<ConvertedImage> {
   const encoded = await encodeImage(file, format, quality);
   return {
-    ...encoded,
+    blob: encoded.blob,
+    width: encoded.width,
+    height: encoded.height,
     format,
     filename: makeOutputFilename(file.name, format),
     originalSize: file.size,
@@ -125,7 +196,9 @@ export async function compressImage({
   const hasSavings = encoded.blob.size < file.size;
 
   return {
-    ...encoded,
+    blob: encoded.blob,
+    width: encoded.width,
+    height: encoded.height,
     format,
     filename: makeImageFilename(file.name, "compressed", format),
     originalSize: file.size,

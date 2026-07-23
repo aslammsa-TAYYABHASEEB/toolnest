@@ -1,6 +1,6 @@
 # ToolNest
 
-ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. Image Converter and Image Compressor both run locally in the browser.
+ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. PDF Merge, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
 
 ## Project status
 
@@ -38,6 +38,28 @@ ToolNest is a mobile-first collection of fast, approachable everyday browser too
 - Honest lossless PNG re-encoding with clear limitation and no-savings states
 - Before-and-after sizes, saved bytes and percentage, repeat compression, and download
 - Shared Sprint 3 image validation, decoding, encoding, and memory-cleanup utilities
+
+### Sprint 4.5 — Shared image engine
+
+- Shared uploader, preview, file information, processing, result, and download components
+- Reusable validation, browser capability, decoding, filename, download, and object URL utilities
+- Common processing state, result, and error models for browser image tools
+
+### Sprint 5 — Image Resizer
+
+- Browser-only JPG, PNG, and WebP resizing at `/tools/image-resizer`
+- Exact pixel dimensions, percentage scaling presets, and a default aspect ratio lock
+- Target-dimension preview, format and quality controls, and before-and-after details
+- Safe 16,384-pixel side and 64-megapixel output limits to reduce canvas memory failures
+- Transparency preservation for PNG/WebP and a white background for JPG output
+
+### Sprint 6 — PDF Merge
+
+- Browser-only multi-file PDF merging at `/tools/pdf-merge`
+- Drag-and-drop selection and ordering with accessible keyboard reorder controls
+- PDF signature, corruption, encryption, and 100 MB combined-size validation
+- Per-file names, sizes, page counts, order numbers, removal, and clear-all actions
+- Reusable browser PDF engine for validation, loading, metadata, merging, downloads, capabilities, filenames, errors, and types
 
 ## Technology stack
 
@@ -107,6 +129,10 @@ app/
   robots.ts           Search crawler rules
   sitemap.ts          Static sitemap generation
 components/
+  image-tool/         Shared browser image tool components
+  image-resizer.tsx   Image Resizer interface and workflow
+  pdf-tool/           Shared browser PDF tool components
+  pdf-merge.tsx       PDF Merge interface and workflow
   ui/                 Reusable UI primitives
   category-card.tsx   Category discovery card
   tool-card.tsx       Coming-soon tool card
@@ -114,14 +140,16 @@ components/
   site-footer.tsx     Shared footer
   theme-toggle.tsx    System/light/dark preference control
 lib/
+  image/              Shared browser image validation and processing engine
+  pdf/                Shared browser PDF validation and processing engine
   site.ts             Site configuration, categories, and planned tools
   cn.ts               Lightweight class-name helper
 ```
 
 ## Current limitations
 
-- Image Converter and Image Compressor are available; all unfinished tools are marked **Coming soon**.
-- No PDF, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
+- PDF Merge, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
+- No PDF split/rotate/extract/organize/delete, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
 - Category upload previews, search, and contact controls remain interface previews only.
 - There is no backend, database, API, authentication, payment flow, or account system.
 - Legal copy is placeholder content and requires appropriate review before a public launch.

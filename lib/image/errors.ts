@@ -6,6 +6,7 @@ export type ImageProcessingErrorCode =
   | "type-mismatch"
   | "decode-failed"
   | "invalid-dimensions"
+  | "dimensions-too-large"
   | "browser-unsupported"
   | "canvas-unavailable"
   | "export-unsupported"

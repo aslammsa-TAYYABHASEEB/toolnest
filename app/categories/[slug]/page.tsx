@@ -29,6 +29,13 @@ export default async function CategoryPage({ params }: PageProps) {
   const category = getCategory(slug);
   if (!category) notFound();
   const categoryTools = getToolsByCategory(category.slug);
+  const availableTools = categoryTools.filter((tool) => tool.available);
+  const hasAvailableTools = availableTools.length > 0;
+  const availableDescription = category.slug === "image-tools"
+    ? "Image Resizer, Image Compressor, and Image Converter handle JPG, PNG, and WebP entirely on your device."
+    : category.slug === "pdf-tools"
+      ? "PDF Merge combines multiple documents in your chosen order entirely on your device."
+      : "";
 
   return (
     <>
@@ -38,15 +45,27 @@ export default async function CategoryPage({ params }: PageProps) {
           <div className="section-heading compact"><div><h2>{category.shortName} tools</h2></div><p>{categoryTools.length} useful tools in the ToolNest collection.</p></div>
           <div className="tool-grid">{categoryTools.map((tool) => <ToolCard key={tool.name} tool={tool} />)}</div>
           <div className="category-preview-grid">
-            {category.slug !== "image-tools" && <UploadDropzone />}
+            {!hasAvailableTools && <UploadDropzone />}
             <aside className="coming-soon-panel">
-              <Badge tone={category.slug === "image-tools" ? "success" : "brand"}>{category.slug === "image-tools" ? "Two tools available" : "More tools planned"}</Badge>
-              <h2>{category.slug === "image-tools" ? "Work with images privately" : "Tools are coming soon"}</h2>
-              <p>{category.slug === "image-tools" ? "Image Converter and Image Compressor handle JPG, PNG, and WebP entirely on your device." : "This category is still in preview. No files or data are processed here."}</p>
-              {category.slug === "image-tools" ? (
+              <Badge tone={hasAvailableTools ? "success" : "brand"}>
+                {hasAvailableTools
+                  ? `${availableTools.length} ${availableTools.length === 1 ? "tool" : "tools"} available`
+                  : "More tools planned"}
+              </Badge>
+              <h2>{hasAvailableTools ? `Work with ${category.shortName.toLowerCase()} privately` : "Tools are coming soon"}</h2>
+              <p>{hasAvailableTools ? availableDescription : "This category is still in preview. No files or data are processed here."}</p>
+              {hasAvailableTools ? (
                 <div className="category-tool-actions">
-                  <Button href="/tools/image-compressor" size="sm">Open Image Compressor</Button>
-                  <Button href="/tools/image-converter" variant="secondary" size="sm">Open Image Converter</Button>
+                  {availableTools.map((tool, index) => (
+                    <Button
+                      key={tool.name}
+                      href={tool.href ?? `/categories/${category.slug}`}
+                      variant={index === 0 ? "primary" : "secondary"}
+                      size="sm"
+                    >
+                      Open {tool.name}
+                    </Button>
+                  ))}
                 </div>
               ) : (
                 <Button href="/#categories" variant="secondary" size="sm">Back to all categories</Button>
