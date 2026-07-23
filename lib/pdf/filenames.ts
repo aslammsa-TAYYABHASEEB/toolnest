@@ -36,3 +36,13 @@ export function makeRangePdfFilename(
 export function makeSplitZipFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}-split-pages.zip`;
 }
+
+export function makeImagesToPdfFilename(sourceFilenames: string[]) {
+  if (sourceFilenames.length !== 1) return "images-to-pdf.pdf";
+  const base = sourceFilenames[0]
+    .replace(/\.[^.]+$/, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/[.\s-]+$/g, "")
+    .trim();
+  return `${base || "image"}.pdf`;
+}

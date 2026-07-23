@@ -1,6 +1,6 @@
 # ToolNest
 
-ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
+ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
 
 ## Project status
 
@@ -68,6 +68,14 @@ ToolNest is a mobile-first collection of fast, approachable everyday browser too
 - Individual PDF downloads plus local ZIP packaging with `fflate` 0.8.3
 - 100 MB input, 1,000 source-page, 200 output-file, and 500 copied-page safety limits
 - Shared PDF parsing, splitting, filenames, result URL lifecycle, errors, and ZIP utilities
+
+### Sprint 8 — JPG to PDF
+
+- Browser-only JPG, PNG, and WebP to PDF conversion at `/tools/jpg-to-pdf`
+- Multiple-image selection, thumbnails, metadata, ordering, removal, and repeat conversion
+- Auto, A4, Letter, and Legal pages with orientation, Fit, Fill, Original, margins, and background controls
+- Direct JPG/PNG embedding with local WebP-to-PNG preparation and explicit transparency backgrounds
+- 20 MB per-image, 100 MB total, 100-image, 64-megapixel per-image, 160-megapixel combined, and 200 MB output limits
 
 ## Technology stack
 
@@ -139,6 +147,7 @@ app/
 components/
   image-tool/         Shared browser image tool components
   image-resizer.tsx   Image Resizer interface and workflow
+  jpg-to-pdf.tsx      JPG to PDF interface and workflow
   pdf-tool/           Shared browser PDF tool components
   pdf-merge.tsx       PDF Merge interface and workflow
   pdf-split.tsx       PDF Split interface and workflow
@@ -157,7 +166,7 @@ lib/
 
 ## Current limitations
 
-- PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
+- JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
 - No PDF rotate/organize/delete, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
 - Category upload previews, search, and contact controls remain interface previews only.
 - There is no backend, database, API, authentication, payment flow, or account system.

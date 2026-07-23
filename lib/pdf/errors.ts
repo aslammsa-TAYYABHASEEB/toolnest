@@ -16,7 +16,10 @@ export type PdfProcessingErrorCode =
   | "too-many-output-files"
   | "workload-too-large"
   | "split-failed"
-  | "zip-failed";
+  | "zip-failed"
+  | "image-embed-failed"
+  | "image-pdf-too-large"
+  | "image-pdf-failed";
 
 export class PdfProcessingError extends Error {
   constructor(

@@ -1,6 +1,9 @@
 export const MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024;
 export const MAX_IMAGE_DIMENSION = 16_384;
 export const MAX_IMAGE_PIXEL_AREA = 64 * 1024 * 1024;
+export const MAX_IMAGE_TO_PDF_FILES = 100;
+export const MAX_IMAGE_TO_PDF_TOTAL_SIZE = 100 * 1024 * 1024;
+export const MAX_IMAGE_TO_PDF_TOTAL_PIXELS = 160 * 1024 * 1024;
 
 export const IMAGE_FORMATS = {
   jpeg: { label: "JPG", mimeType: "image/jpeg", extension: "jpg", supportsQuality: true },
@@ -15,6 +18,11 @@ export type ImageMetadata = {
   format: ImageFormat;
   width: number;
   height: number;
+};
+
+export type PdfImageItem = ImageMetadata & {
+  id: string;
+  previewUrl: string;
 };
 
 export type ImageProcessingStatus =

@@ -4,6 +4,7 @@ export const MIN_PDFS_TO_MERGE = 2;
 export const MAX_PDF_SPLIT_SOURCE_PAGES = 1000;
 export const MAX_PDF_SPLIT_OUTPUT_FILES = 200;
 export const MAX_PDF_SPLIT_WORK_PAGES = 500;
+export const MAX_IMAGE_PDF_OUTPUT_SIZE = 200 * 1024 * 1024;
 
 export type PdfMergeStatus =
   | "idle"
@@ -59,4 +60,27 @@ export type PdfSplitResult = {
   files: SplitPdfFile[];
   pageCount: number;
   totalSize: number;
+};
+
+export type ImagePdfPageSize = "auto" | "a4" | "letter" | "legal";
+export type ImagePdfOrientation = "auto" | "portrait" | "landscape";
+export type ImagePdfFit = "fit" | "fill" | "original";
+export type ImagePdfMargin = "none" | "small" | "medium" | "large";
+export type ImagePdfBackground = "white" | "light-gray" | "black";
+
+export type ImagePdfOptions = {
+  pageSize: ImagePdfPageSize;
+  orientation: ImagePdfOrientation;
+  fit: ImagePdfFit;
+  margin: ImagePdfMargin;
+  background: ImagePdfBackground;
+};
+
+export type ImagePdfResult = {
+  blob: Blob;
+  filename: string;
+  size: number;
+  pageCount: number;
+  imageCount: number;
+  options: ImagePdfOptions;
 };
