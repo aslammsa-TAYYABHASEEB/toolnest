@@ -15,13 +15,26 @@ export type ImageMetadata = {
   height: number;
 };
 
-export type ConvertedImage = {
+export type ImageProcessingStatus =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "processing"
+  | "success"
+  | "no-savings"
+  | "error";
+
+export type ImageProcessResult = {
   blob: Blob;
   format: ImageFormat;
   filename: string;
   width: number;
   height: number;
+  originalSize: number;
+  outputSize: number;
 };
+
+export type ConvertedImage = ImageProcessResult;
 
 export type ConversionOptions = {
   file: File;
@@ -35,8 +48,7 @@ export type CompressionOptions = {
   quality: number;
 };
 
-export type CompressedImage = ConvertedImage & {
-  originalSize: number;
+export type CompressedImage = ImageProcessResult & {
   compressedSize: number;
   savedBytes: number;
   savedPercentage: number;
