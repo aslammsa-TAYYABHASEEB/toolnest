@@ -1,6 +1,6 @@
 # ToolNest
 
-ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. PDF Merge, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
+ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
 
 ## Project status
 
@@ -60,6 +60,14 @@ ToolNest is a mobile-first collection of fast, approachable everyday browser too
 - PDF signature, corruption, encryption, and 100 MB combined-size validation
 - Per-file names, sizes, page counts, order numbers, removal, and clear-all actions
 - Reusable browser PDF engine for validation, loading, metadata, merging, downloads, capabilities, filenames, errors, and types
+
+### Sprint 7 — PDF Split
+
+- Browser-only selected-page extraction, per-page splitting, and range splitting at `/tools/pdf-split`
+- Live page-expression validation with reverse-range normalization, deduplication, document ordering, and overlap checks
+- Individual PDF downloads plus local ZIP packaging with `fflate` 0.8.3
+- 100 MB input, 1,000 source-page, 200 output-file, and 500 copied-page safety limits
+- Shared PDF parsing, splitting, filenames, result URL lifecycle, errors, and ZIP utilities
 
 ## Technology stack
 
@@ -133,6 +141,7 @@ components/
   image-resizer.tsx   Image Resizer interface and workflow
   pdf-tool/           Shared browser PDF tool components
   pdf-merge.tsx       PDF Merge interface and workflow
+  pdf-split.tsx       PDF Split interface and workflow
   ui/                 Reusable UI primitives
   category-card.tsx   Category discovery card
   tool-card.tsx       Coming-soon tool card
@@ -148,8 +157,8 @@ lib/
 
 ## Current limitations
 
-- PDF Merge, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
-- No PDF split/rotate/extract/organize/delete, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
+- PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
+- No PDF rotate/organize/delete, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
 - Category upload previews, search, and contact controls remain interface previews only.
 - There is no backend, database, API, authentication, payment flow, or account system.
 - Legal copy is placeholder content and requires appropriate review before a public launch.

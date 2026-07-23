@@ -16,7 +16,7 @@ export async function loadPdfDocument(file: File) {
     if (message.includes("encrypt")) {
       throw new PdfProcessingError(
         "encrypted-pdf",
-        `${file.name} is password-protected or encrypted and cannot be merged.`,
+        `${file.name} is password-protected or encrypted and cannot be processed.`,
       );
     }
     throw new PdfProcessingError(

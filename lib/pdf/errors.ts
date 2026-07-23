@@ -7,7 +7,16 @@ export type PdfProcessingErrorCode =
   | "encrypted-pdf"
   | "total-too-large"
   | "not-enough-files"
-  | "merge-failed";
+  | "merge-failed"
+  | "empty-document"
+  | "too-many-source-pages"
+  | "invalid-page-selection"
+  | "page-out-of-range"
+  | "overlapping-ranges"
+  | "too-many-output-files"
+  | "workload-too-large"
+  | "split-failed"
+  | "zip-failed";
 
 export class PdfProcessingError extends Error {
   constructor(

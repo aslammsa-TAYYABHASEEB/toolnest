@@ -16,6 +16,12 @@ type PdfUploaderProps = {
   inputRef: RefObject<HTMLInputElement | null>;
   busy: boolean;
   compact?: boolean;
+  multiple?: boolean;
+  inputId?: string;
+  heading?: string;
+  compactHeading?: string;
+  buttonLabel?: string;
+  helperText?: string;
   onSelect: (files: File[]) => void;
 };
 
@@ -23,18 +29,26 @@ export function PdfUploader({
   inputRef,
   busy,
   compact = false,
+  multiple = true,
+  inputId = "pdf-files",
+  heading = "Drop PDF files here",
+  compactHeading = "Add more PDFs",
+  buttonLabel = "Choose PDFs",
+  helperText,
   onSelect,
 }: PdfUploaderProps) {
   const [dragActive, setDragActive] = useState(false);
 
   function handleInput(event: ChangeEvent<HTMLInputElement>) {
-    onSelect(Array.from(event.target.files ?? []));
+    const selected = Array.from(event.target.files ?? []);
+    onSelect(multiple ? selected : selected.slice(0, 1));
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setDragActive(false);
-    onSelect(Array.from(event.dataTransfer.files));
+    const selected = Array.from(event.dataTransfer.files);
+    onSelect(multiple ? selected : selected.slice(0, 1));
   }
 
   return (
@@ -42,16 +56,16 @@ export function PdfUploader({
       <input
         ref={inputRef}
         className="sr-only"
-        id="pdf-files"
+        id={inputId}
         type="file"
         accept="application/pdf,.pdf"
-        multiple
+        multiple={multiple}
         onChange={handleInput}
         disabled={busy}
       />
       <label
         className={`pdf-dropzone${compact ? " is-compact" : ""}${dragActive ? " is-dragging" : ""}${busy ? " is-busy" : ""}`}
-        htmlFor="pdf-files"
+        htmlFor={inputId}
         tabIndex={busy ? -1 : 0}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -73,16 +87,16 @@ export function PdfUploader({
       >
         <span className="pdf-upload-icon" aria-hidden="true">PDF</span>
         <span className="pdf-drop-copy">
-          <strong>{compact ? "Add more PDFs" : "Drop PDF files here"}</strong>
+          <strong>{compact ? compactHeading : heading}</strong>
           <small>
-            Select two or more PDFs · {formatPdfBytes(MAX_PDF_TOTAL_SIZE)} total
+            {helperText ?? `Select two or more PDFs · ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} total`}
           </small>
         </span>
         <span
           className={buttonClassName({ variant: compact ? "secondary" : "primary" })}
           aria-hidden="true"
         >
-          Choose PDFs
+          {buttonLabel}
         </span>
       </label>
     </>

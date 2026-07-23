@@ -1,3 +1,38 @@
 export function makeMergedPdfFilename() {
   return "merged-document.pdf";
 }
+
+function cleanPdfBaseName(filename: string) {
+  const withoutExtension = filename.replace(/\.pdf$/i, "");
+  const cleaned = withoutExtension
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[.\s-]+$/g, "")
+    .trim();
+  return cleaned || "document";
+}
+
+export function makeExtractedPdfFilename(
+  sourceFilename: string,
+  label: string,
+) {
+  return `${cleanPdfBaseName(sourceFilename)}-pages-${label}.pdf`;
+}
+
+export function makeSinglePagePdfFilename(
+  sourceFilename: string,
+  pageNumber: number,
+) {
+  return `${cleanPdfBaseName(sourceFilename)}-page-${pageNumber}.pdf`;
+}
+
+export function makeRangePdfFilename(
+  sourceFilename: string,
+  label: string,
+) {
+  return `${cleanPdfBaseName(sourceFilename)}-pages-${label}.pdf`;
+}
+
+export function makeSplitZipFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}-split-pages.zip`;
+}

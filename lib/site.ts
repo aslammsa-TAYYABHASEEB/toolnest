@@ -60,6 +60,7 @@ export const categories: Category[] = [
 
 export const tools: Tool[] = [
   { name: "PDF Merge", description: "Combine multiple PDF files privately in the order you choose.", category: "pdf-tools", icon: "M", popular: true, available: true, href: "/tools/pdf-merge" },
+  { name: "PDF Split", description: "Extract pages or divide a PDF into private browser downloads.", category: "pdf-tools", icon: "S", popular: true, available: true, href: "/tools/pdf-split" },
   { name: "Compress PDF", description: "Reduce PDF file size while keeping it readable.", category: "pdf-tools", icon: "C", popular: true },
   { name: "PDF to Word", description: "Prepare PDF documents for Word conversion.", category: "pdf-tools", icon: "W" },
   { name: "Image Resizer", description: "Resize JPG, PNG, and WebP images privately by pixels or percentage.", category: "image-tools", icon: "R", popular: true, available: true, href: "/tools/image-resizer" },
