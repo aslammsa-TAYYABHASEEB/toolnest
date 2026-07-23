@@ -10,6 +10,8 @@ export type Tool = {
   category: string;
   icon: string;
   popular?: boolean;
+  available?: boolean;
+  href?: string;
 };
 
 export type Category = {
@@ -60,9 +62,9 @@ export const tools: Tool[] = [
   { name: "Merge PDF", description: "Combine multiple PDF files into one document.", category: "pdf-tools", icon: "M", popular: true },
   { name: "Compress PDF", description: "Reduce PDF file size while keeping it readable.", category: "pdf-tools", icon: "C", popular: true },
   { name: "PDF to Word", description: "Prepare PDF documents for Word conversion.", category: "pdf-tools", icon: "W" },
-  { name: "Resize Image", description: "Set custom image dimensions in a few steps.", category: "image-tools", icon: "R", popular: true },
-  { name: "Compress Image", description: "Make images smaller for faster sharing.", category: "image-tools", icon: "C" },
-  { name: "Convert Image", description: "Prepare JPG, PNG, and WebP format conversions.", category: "image-tools", icon: "↻" },
+  { name: "Resize Image", description: "Set custom image dimensions in a few steps.", category: "image-tools", icon: "R" },
+  { name: "Image Compressor", description: "Reduce JPG, PNG, and WebP file sizes privately in your browser.", category: "image-tools", icon: "C", popular: true, available: true, href: "/tools/image-compressor" },
+  { name: "Image Converter", description: "Convert JPG, PNG, and WebP images privately in your browser.", category: "image-tools", icon: "↻", available: true, href: "/tools/image-converter" },
   { name: "Word Counter", description: "Count words, characters, sentences, and reading time.", category: "text-tools", icon: "W", popular: true },
   { name: "Case Converter", description: "Switch text between uppercase and lowercase styles.", category: "text-tools", icon: "Aa" },
   { name: "Remove Extra Spaces", description: "Clean repeated spaces and untidy line breaks.", category: "text-tools", icon: "¶" },

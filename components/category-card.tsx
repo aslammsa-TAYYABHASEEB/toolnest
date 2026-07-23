@@ -9,7 +9,7 @@ export function CategoryCard({ category, count }: { category: Category; count: n
       <span className="category-copy">
         <strong>{category.name}</strong>
         <span>{category.description}</span>
-        <Badge>{count} tools planned</Badge>
+        <Badge>{count} tools</Badge>
       </span>
       <span className="round-arrow" aria-hidden="true">→</span>
     </Link>

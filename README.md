@@ -1,6 +1,6 @@
 # ToolNest
 
-ToolNest is a mobile-first foundation for a fast, approachable collection of everyday browser tools. The current release focuses on navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready static routes. Tool processing is intentionally not implemented yet.
+ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. Image Converter and Image Compressor both run locally in the browser.
 
 ## Project status
 
@@ -23,6 +23,21 @@ ToolNest is a mobile-first foundation for a fast, approachable collection of eve
 - Refined homepage, navigation, category, legal, contact, and footer layouts
 - Accessible focus states, reduced-motion support, and responsive 1/2/4-column grids
 - Clearly labeled space reserved for a future advertising placement
+
+### Sprint 3 — Image Converter
+
+- Browser-only JPG, PNG, and WebP conversion at `/tools/image-converter`
+- Drag-and-drop or file selection, preview, source details, quality control, and download
+- Transparency preservation for PNG/WebP and a white background for JPG output
+- File signature validation, a 20 MB limit, clear errors, and object URL cleanup
+
+### Sprint 4 — Image Compressor
+
+- Browser-only JPG, PNG, and WebP compression at `/tools/image-compressor`
+- Quality controls for lossy JPG and WebP output with original dimensions retained
+- Honest lossless PNG re-encoding with clear limitation and no-savings states
+- Before-and-after sizes, saved bytes and percentage, repeat compression, and download
+- Shared Sprint 3 image validation, decoding, encoding, and memory-cleanup utilities
 
 ## Technology stack
 
@@ -105,9 +120,9 @@ lib/
 
 ## Current limitations
 
-- Every tool is marked **Coming soon**.
-- No PDF, image, video, audio, OCR, QR, AI, or other processing logic exists.
-- Upload, search, and contact controls are interface previews only.
+- Image Converter and Image Compressor are available; all unfinished tools are marked **Coming soon**.
+- No PDF, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
+- Category upload previews, search, and contact controls remain interface previews only.
 - There is no backend, database, API, authentication, payment flow, or account system.
 - Legal copy is placeholder content and requires appropriate review before a public launch.
 - `siteConfig.url` uses a placeholder domain and must be updated before deployment.

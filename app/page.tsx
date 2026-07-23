@@ -48,8 +48,8 @@ export default function HomePage() {
       <section className="section section-tint" id="popular-tools">
         <div className="container">
           <div className="section-heading">
-            <div><span className="kicker">Popular tools</span><h2>Useful shortcuts, ready for what’s next</h2></div>
-            <p>Our initial tool collection is mapped out and will be activated in future releases.</p>
+            <div><span className="kicker">Popular tools</span><h2>Useful shortcuts for everyday work</h2></div>
+            <p>Start with the tools available today and see what is coming next.</p>
           </div>
           <div className="tool-grid">
             {popularTools.map((tool) => <ToolCard key={tool.name} tool={tool} />)}
