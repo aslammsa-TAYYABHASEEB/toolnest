@@ -11,7 +11,7 @@ export function SiteFooter() {
             <span>Tool<span>Nest</span></span>
           </Link>
           <p>{siteConfig.description}</p>
-          <div className="footer-status"><span aria-hidden="true" /> All systems in foundation mode</div>
+          <div className="footer-status"><span aria-hidden="true" /> Files stay on your device</div>
         </div>
         <div>
           <h2>Tools</h2>

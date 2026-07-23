@@ -11,7 +11,7 @@ ToolNest is a mobile-first collection of fast, approachable everyday browser too
 - PDF, image, text, and calculator category pages
 - Reusable tool and category cards
 - Responsive navigation and footer
-- Privacy Policy, Terms of Use, Disclaimer, and Contact placeholders
+- Privacy Policy, Terms of Use, Disclaimer, and Contact routes
 - Static metadata, sitemap, robots.txt, and custom not-found page
 
 ### Sprint 2 — Design system and UI foundation
@@ -85,7 +85,7 @@ ToolNest is a mobile-first collection of fast, approachable everyday browser too
 - 100 MB input, 1,000 source-page, 100 output-image, 8,192-pixel dimension, and 120-megapixel workload limits
 - Mozilla PDF.js rendering with sequential canvas processing and temporary URL cleanup
 
-### Sprint 10 â€” PDF Rotate
+### Sprint 10 — PDF Rotate
 
 - Browser-only PDF page rotation at `/tools/pdf-rotate`
 - All-page, page-expression, and individual-card selection with synchronized controls
@@ -151,10 +151,10 @@ npm run build
 ```text
 app/
   categories/[slug]/  Static category routes
-  contact/            Contact placeholder
-  disclaimer/         Disclaimer placeholder
-  privacy-policy/     Privacy Policy placeholder
-  terms/              Terms of Use placeholder
+  contact/            Contact information
+  disclaimer/         Disclaimer
+  privacy-policy/     Privacy Policy
+  terms/              Terms of Use
   globals.css         Global component and responsive styles
   tokens.css          Light/dark semantic design tokens
   layout.tsx          Shared metadata, theme bootstrap, header, and footer
@@ -187,10 +187,43 @@ lib/
 
 - PDF Rotate, PDF to JPG, JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
 - No PDF organize/delete, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
-- Category upload previews, search, and contact controls remain interface previews only.
+- Category upload previews and search remain interface previews only.
 - There is no backend, database, API, authentication, payment flow, or account system.
-- Legal copy is placeholder content and requires appropriate review before a public launch.
-- `siteConfig.url` uses a placeholder domain and must be updated before deployment.
+- The included legal pages describe the current browser-local implementation but still require review for the operator's jurisdiction and business.
+- A deployment must set `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_CONTACT_EMAIL`; local builds otherwise use a clearly non-production placeholder domain and hide the contact page from indexing.
+
+## Launch and deployment
+
+ToolNest requires Node.js 20.19 or newer and npm. Install exactly the dependency versions recorded in the lockfile, configure the public values, then build and serve the optimized application:
+
+```bash
+npm ci
+copy .env.example .env.local
+npm run typecheck
+npm run build
+npm run start
+```
+
+Set these values in the deployment platform rather than committing `.env.local`:
+
+```dotenv
+NEXT_PUBLIC_SITE_URL=https://tools.example.com
+NEXT_PUBLIC_CONTACT_EMAIL=support@example.com
+```
+
+`NEXT_PUBLIC_SITE_URL` must be the final HTTPS origin without a path. It supplies canonical URLs, Open Graph URLs, `robots.txt`, and the sitemap. The contact address is intentionally public and is used for the contact route.
+
+The released tools support current desktop and mobile versions of Chrome, Edge, Firefox, and Safari where the required Canvas, Blob, object URL, Web Worker, and file download APIs are available. Use HTTPS in production. Processing capacity depends on the browser and device: images are limited to 20 MB each, PDF workflows to 100 MB total, and individual tools impose additional page, output, pixel, or memory safeguards. Password-protected PDFs are unsupported. Editing a PDF can invalidate its existing digital signatures.
+
+Before launch:
+
+- Confirm the production URL and contact address in rendered metadata, `robots.txt`, and `sitemap.xml`.
+- Review the Privacy Policy, Terms, and Disclaimer for the deployment jurisdiction.
+- Run `npm ci`, `npm run typecheck`, `npm run build`, `npm audit`, and `git diff --check`.
+- Smoke-test every available tool with valid, invalid, corrupt, and maximum-size inputs in supported browsers.
+- Verify the PDF.js worker asset is served from the same deployment and that restrictive hosting rules do not block it.
+- Confirm HTTPS, security response headers, dark/light/system themes, downloads, keyboard operation, and mobile layouts.
+- Keep user files, generated outputs, test fixtures, logs, secrets, environment files, and build artifacts out of Git.
 
 ## Privacy-first processing direction
 

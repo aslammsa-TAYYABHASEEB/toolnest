@@ -86,7 +86,7 @@ export default function PdfRotatePage() {
         description="Turn all or selected PDF pages clockwise, counter-clockwise, or 180 degrees without flattening the document."
         eyebrow="PDF tool"
         accent="coral"
-        icon="â†·"
+        icon="↷"
       />
 
       <section className="tool-page-section">
@@ -100,7 +100,7 @@ export default function PdfRotatePage() {
               and vector graphics are not turned into images.
             </p>
             <ul>
-              <li>Clockwise, counter-clockwise, and 180Â°</li>
+              <li>Clockwise, counter-clockwise, and 180°</li>
               <li>All, selected, or individual pages</li>
               <li>Up to 100 MB and 500 pages</li>
             </ul>
@@ -115,7 +115,7 @@ export default function PdfRotatePage() {
               <span className="kicker">How PDF rotation works</span>
               <h2>Change orientation without rebuilding page content</h2>
               <p>
-                PDF Rotate updates each chosen pageâ€™s rotation metadata. The
+                PDF Rotate updates each chosen page’s rotation metadata. The
                 page order, dimensions, selectable text, vector graphics, and
                 unmodified pages remain intact.
               </p>

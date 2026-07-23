@@ -52,9 +52,9 @@ function createPdfId() {
 
 function adjustmentLabel(rotation: PdfQuarterRotation) {
   if (rotation === 0) return "None";
-  if (rotation === 90) return "+90Â°";
-  if (rotation === 180) return "180Â°";
-  return "âˆ’90Â°";
+  if (rotation === 90) return "+90°";
+  if (rotation === 180) return "180°";
+  return "−90°";
 }
 
 export function PdfRotate() {
@@ -228,7 +228,7 @@ export function PdfRotate() {
     <section className="pdf-rotate-shell" aria-labelledby="pdf-rotate-title">
       <h2 className="sr-only" id="pdf-rotate-title">Rotate PDF pages</h2>
       <div className="privacy-banner">
-        <span aria-hidden="true">âœ“</span>
+        <span aria-hidden="true">✓</span>
         <strong>Your PDF is rotated locally and never leaves your device.</strong>
       </div>
 
@@ -241,7 +241,7 @@ export function PdfRotate() {
         heading="Drop one PDF here"
         compactHeading="Replace PDF"
         buttonLabel={source ? "Choose another" : "Choose PDF"}
-        helperText={`One PDF Â· ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} maximum`}
+        helperText={`One PDF · ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} maximum`}
         onSelect={(files) => void selectPdf(files)}
       />
 
@@ -253,7 +253,7 @@ export function PdfRotate() {
               <strong title={source.file.name}>{source.file.name}</strong>
               <small>
                 {formatPdfBytes(source.file.size)}
-                {" Â· "}
+                {" · "}
                 {source.pageCount} page{source.pageCount === 1 ? "" : "s"}
               </small>
             </span>
@@ -319,7 +319,7 @@ export function PdfRotate() {
                 <strong>
                   {selectedPages.length} selected page{selectedPages.length === 1 ? "" : "s"}
                 </strong>
-                {" Â· "}
+                {" · "}
                 {rotatedPageCount} page{rotatedPageCount === 1 ? "" : "s"} will differ from the original
               </p>
             )}
@@ -345,7 +345,7 @@ export function PdfRotate() {
               onClick={() => rotatePages(selectedPages, 180)}
               disabled={busy || selectedPages.length === 0 || Boolean(selectionError)}
             >
-              Rotate selected 180Â°
+              Rotate selected 180°
             </Button>
             <Button
               variant="ghost"
@@ -398,9 +398,9 @@ export function PdfRotate() {
                     </span>
                     <strong>Page {preview.pageNumber}</strong>
                     <small>
-                      Original {original}Â° Â· Change {adjustmentLabel(adjustment)}
+                      Original {original}° · Change {adjustmentLabel(adjustment)}
                     </small>
-                    <span>Final {effective}Â°</span>
+                    <span>Final {effective}°</span>
                   </button>
                   <div className="pdf-thumbnail-actions">
                     <button
@@ -410,7 +410,7 @@ export function PdfRotate() {
                       aria-label={`Rotate page ${preview.pageNumber} counter-clockwise`}
                       title="Rotate counter-clockwise"
                     >
-                      â†¶
+                      ↶
                     </button>
                     <button
                       type="button"
@@ -419,7 +419,7 @@ export function PdfRotate() {
                       aria-label={`Reset page ${preview.pageNumber} rotation`}
                       title="Reset to original"
                     >
-                      0Â°
+                      0°
                     </button>
                     <button
                       type="button"
@@ -428,7 +428,7 @@ export function PdfRotate() {
                       aria-label={`Rotate page ${preview.pageNumber} clockwise`}
                       title="Rotate clockwise"
                     >
-                      â†·
+                      ↷
                     </button>
                   </div>
                 </article>
@@ -464,7 +464,7 @@ export function PdfRotate() {
               onClick={() => void generate()}
               disabled={busy || rotatedPageCount === 0}
             >
-              {status === "rotating" ? "Creating rotated PDFâ€¦" : "Create rotated PDF"}
+              {status === "rotating" ? "Creating rotated PDF…" : "Create rotated PDF"}
             </Button>
             <Button variant="ghost" onClick={clear} disabled={busy}>
               Clear
@@ -473,15 +473,15 @@ export function PdfRotate() {
 
           {result && download.download && (
             <div className="pdf-merge-result pdf-rotate-result" role="status">
-              <span className="success-mark" aria-hidden="true">âœ“</span>
+              <span className="success-mark" aria-hidden="true">✓</span>
               <div>
                 <strong>Rotated PDF is ready</strong>
                 <p title={result.filename}>{result.filename}</p>
                 <small>
                   {formatPdfBytes(result.size)}
-                  {" Â· "}
+                  {" · "}
                   {result.pageCount} page{result.pageCount === 1 ? "" : "s"}
-                  {" Â· "}
+                  {" · "}
                   {result.rotatedPageCount} rotated
                 </small>
               </div>
@@ -516,11 +516,11 @@ export function PdfRotate() {
       )}
 
       <div className="pdf-status" aria-live="polite" aria-atomic="true">
-        {status === "loading" && <p>Loading the PDF and preparing compact page previewsâ€¦</p>}
-        {status === "rotating" && <p>Applying page rotations and saving locallyâ€¦</p>}
+        {status === "loading" && <p>Loading the PDF and preparing compact page previews…</p>}
+        {status === "rotating" && <p>Applying page rotations and saving locally…</p>}
         {error && (
           <p className="converter-error">
-            <strong>Couldnâ€™t rotate this PDF.</strong> {error.message}
+            <strong>Couldn’t rotate this PDF.</strong> {error.message}
           </p>
         )}
       </div>

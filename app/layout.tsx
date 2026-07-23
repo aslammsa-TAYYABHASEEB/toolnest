@@ -9,11 +9,13 @@ export const metadata: Metadata = {
   title: { default: `${siteConfig.name} — Simple online tools`, template: `%s | ${siteConfig.name}` },
   description: siteConfig.description,
   applicationName: siteConfig.name,
+  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     siteName: siteConfig.name,
     title: `${siteConfig.name} — Simple online tools`,
     description: siteConfig.description,
+    url: "/",
   },
   twitter: { card: "summary", title: siteConfig.name, description: siteConfig.description },
 };

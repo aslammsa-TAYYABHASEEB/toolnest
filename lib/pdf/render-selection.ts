@@ -46,7 +46,7 @@ export async function estimatePdfRender(
       if (width > MAX_PDF_RENDER_DIMENSION || height > MAX_PDF_RENDER_DIMENSION) {
         throw new PdfProcessingError(
           "render-dimension-too-large",
-          `Page ${pageNumber} would be ${width.toLocaleString()} Ã— ${height.toLocaleString()} pixels. Lower the scale so neither dimension exceeds ${MAX_PDF_RENDER_DIMENSION.toLocaleString()} pixels.`,
+          `Page ${pageNumber} would be ${width.toLocaleString()} × ${height.toLocaleString()} pixels. Lower the scale so neither dimension exceeds ${MAX_PDF_RENDER_DIMENSION.toLocaleString()} pixels.`,
         );
       }
       totalPixels += width * height;

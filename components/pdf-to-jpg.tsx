@@ -182,7 +182,7 @@ export function PdfToJpg() {
     <section className="pdf-split-shell pdf-to-image-shell" aria-labelledby="pdf-to-image-title">
       <h2 className="sr-only" id="pdf-to-image-title">Convert PDF pages to images</h2>
       <div className="privacy-banner">
-        <span aria-hidden="true">âœ“</span>
+        <span aria-hidden="true">✓</span>
         <strong>Your PDF is converted locally and never leaves your device.</strong>
       </div>
 
@@ -195,7 +195,7 @@ export function PdfToJpg() {
         heading="Drop one PDF here"
         compactHeading="Replace PDF"
         buttonLabel={source ? "Choose another" : "Choose PDF"}
-        helperText={`One PDF Â· ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} maximum`}
+        helperText={`One PDF · ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} maximum`}
         onSelect={(files) => void selectPdf(files)}
       />
 
@@ -207,7 +207,7 @@ export function PdfToJpg() {
               <strong title={source.file.name}>{source.file.name}</strong>
               <small>
                 {formatPdfBytes(source.file.size)}
-                {" Â· "}
+                {" · "}
                 {source.pageCount} page{source.pageCount === 1 ? "" : "s"}
               </small>
             </span>
@@ -336,7 +336,7 @@ export function PdfToJpg() {
                         setScale(value);
                       }}
                     />
-                    {value}Ã—
+                    {value}×
                   </label>
                 ))}
               </div>
@@ -350,11 +350,11 @@ export function PdfToJpg() {
               <p>
                 <strong>
                   {plan.pages.length} image{plan.pages.length === 1 ? "" : "s"}
-                  {" Â· "}
+                  {" · "}
                   {format === "jpeg" ? "JPG" : "PNG"}
                 </strong>
-                {" Â· "}
-                first-page estimate {estimatedWidth.toLocaleString()} Ã— {estimatedHeight.toLocaleString()} px
+                {" · "}
+                first-page estimate {estimatedWidth.toLocaleString()} × {estimatedHeight.toLocaleString()} px
               </p>
             ) : (
               <p>Enter pages to preview the conversion plan.</p>
@@ -376,9 +376,9 @@ export function PdfToJpg() {
           <div className="pdf-split-actions">
             <Button size="lg" onClick={() => void convert()} disabled={!canConvert}>
               {status === "rendering"
-                ? "Renderingâ€¦"
+                ? "Rendering…"
                 : status === "packaging"
-                  ? "Packagingâ€¦"
+                  ? "Packaging…"
                   : result
                     ? "Convert again"
                     : "Convert pages"}
@@ -391,14 +391,14 @@ export function PdfToJpg() {
           {result && downloads.downloads.length === result.images.length && (
             <div className="pdf-split-result" role="status">
               <div className="pdf-result-heading">
-                <span className="success-mark" aria-hidden="true">âœ“</span>
+                <span className="success-mark" aria-hidden="true">✓</span>
                 <div>
                   <strong>Images are ready</strong>
                   <p>
                     {result.pageCount} image{result.pageCount === 1 ? "" : "s"}
-                    {" Â· "}
+                    {" · "}
                     {formatPdfBytes(result.totalSize)}
-                    {" Â· "}
+                    {" · "}
                     {result.options.format === "jpeg" ? "JPG" : "PNG"}
                   </p>
                 </div>
@@ -424,11 +424,11 @@ export function PdfToJpg() {
                       <strong title={image.filename}>{image.filename}</strong>
                       <small>
                         Page {image.pageNumber}
-                        {" Â· "}
-                        {image.width.toLocaleString()} Ã— {image.height.toLocaleString()} px
-                        {" Â· "}
+                        {" · "}
+                        {image.width.toLocaleString()} × {image.height.toLocaleString()} px
+                        {" · "}
                         {formatPdfBytes(image.size)}
-                        {" Â· "}
+                        {" · "}
                         {image.format === "jpeg" ? "JPG" : "PNG"}
                       </small>
                     </span>
@@ -468,12 +468,12 @@ export function PdfToJpg() {
       )}
 
       <div className="pdf-status" aria-live="polite" aria-atomic="true">
-        {status === "preparing" && <p>Preparing and checking your PDFâ€¦</p>}
-        {status === "rendering" && <p>Rendering selected pages inside your browserâ€¦</p>}
-        {status === "packaging" && <p>Packaging the images into a ZIPâ€¦</p>}
+        {status === "preparing" && <p>Preparing and checking your PDF…</p>}
+        {status === "rendering" && <p>Rendering selected pages inside your browser…</p>}
+        {status === "packaging" && <p>Packaging the images into a ZIP…</p>}
         {error && (
           <p className="converter-error">
-            <strong>Couldnâ€™t convert this PDF.</strong> {error.message}
+            <strong>Couldn’t convert this PDF.</strong> {error.message}
           </p>
         )}
       </div>

@@ -11,6 +11,9 @@ export function makeImageFilename(
   const base = filename
     .replace(/\.[^.]+$/, "")
     .replace(/-(converted|compressed|resized(?:-\d+x\d+)?)$/i, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[.\s-]+$/g, "")
     .trim() || "image";
 
   return `${base}-${suffix}${detail ? `-${detail}` : ""}.${IMAGE_FORMATS[format].extension}`;

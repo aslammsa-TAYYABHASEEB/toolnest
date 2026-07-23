@@ -33,7 +33,7 @@ const faqs = [
   },
   {
     question: "What does render scale change?",
-    answer: "Scale controls output pixel dimensions. A higher scale can make text and details sharper, but it needs more memory and produces larger images. The practical default is 1.5Ã—.",
+    answer: "Scale controls output pixel dimensions. A higher scale can make text and details sharper, but it needs more memory and produces larger images. The practical default is 1.5×.",
   },
   {
     question: "Why are some large conversions blocked?",

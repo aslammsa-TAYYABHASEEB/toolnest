@@ -1,7 +1,17 @@
+const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+const siteUrl = configuredSiteUrl
+  ? new URL(configuredSiteUrl).toString().replace(/\/$/, "")
+  : "https://toolnest.example";
+
 export const siteConfig = {
   name: "ToolNest",
   description: "Simple, fast online tools for everyday files, images, text, and calculations.",
-  url: "https://toolnest.example",
+  url: siteUrl,
+  contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim() ?? "",
+  isProductionConfigured: Boolean(
+    configuredSiteUrl
+    && process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim(),
+  ),
 };
 
 export type Tool = {
