@@ -4,7 +4,9 @@ import type { SplitPdfFile } from "@/lib/pdf/types";
 
 const ZIP_MIME_TYPE = "application/zip";
 
-export async function createPdfZip(files: SplitPdfFile[]) {
+export async function createPdfZip(
+  files: Array<Pick<SplitPdfFile, "blob" | "filename">>,
+) {
   try {
     const entries: Record<string, Uint8Array> = {};
     for (const file of files) {
@@ -23,7 +25,7 @@ export async function createPdfZip(files: SplitPdfFile[]) {
   } catch {
     throw new PdfProcessingError(
       "zip-failed",
-      "The split PDFs were created, but the ZIP download could not be prepared.",
+      "The output files were created, but the ZIP download could not be prepared.",
     );
   }
 }

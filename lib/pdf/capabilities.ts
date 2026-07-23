@@ -31,3 +31,20 @@ export function assertPdfBrowserSupport() {
     );
   }
 }
+
+export function assertPdfRenderingSupport() {
+  assertPdfBrowserSupport();
+  const canUseCanvas = typeof document !== "undefined"
+    && typeof document.createElement === "function";
+  const canvas = canUseCanvas ? document.createElement("canvas") : null;
+  if (
+    !canUseCanvas
+    || typeof canvas?.getContext !== "function"
+    || typeof canvas.toBlob !== "function"
+  ) {
+    throw new PdfProcessingError(
+      "renderer-unavailable",
+      "PDF page rendering is not available in this browser.",
+    );
+  }
+}

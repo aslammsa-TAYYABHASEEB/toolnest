@@ -5,6 +5,11 @@ export const MAX_PDF_SPLIT_SOURCE_PAGES = 1000;
 export const MAX_PDF_SPLIT_OUTPUT_FILES = 200;
 export const MAX_PDF_SPLIT_WORK_PAGES = 500;
 export const MAX_IMAGE_PDF_OUTPUT_SIZE = 200 * 1024 * 1024;
+export const MAX_PDF_RENDER_SOURCE_PAGES = 1000;
+export const MAX_PDF_RENDER_OUTPUTS = 100;
+export const MAX_PDF_RENDER_DIMENSION = 8192;
+export const MAX_PDF_RENDER_TOTAL_PIXELS = 120 * 1024 * 1024;
+export const MAX_PDF_RENDER_MEMORY = 512 * 1024 * 1024;
 
 export type PdfMergeStatus =
   | "idle"
@@ -83,4 +88,44 @@ export type ImagePdfResult = {
   pageCount: number;
   imageCount: number;
   options: ImagePdfOptions;
+};
+
+export type PdfImageFormat = "jpeg" | "png";
+export type PdfRenderScale = 1 | 1.5 | 2 | 3;
+export type PdfPageSelectionMode = "all" | "selected" | "range";
+
+export type PdfRenderOptions = {
+  format: PdfImageFormat;
+  quality: number;
+  scale: PdfRenderScale;
+};
+
+export type PdfRenderSource = PdfFileMetadata & {
+  firstPageWidth: number;
+  firstPageHeight: number;
+};
+
+export type RenderedPdfPage = {
+  blob: Blob;
+  previewBlob: Blob;
+  filename: string;
+  pageNumber: number;
+  width: number;
+  height: number;
+  size: number;
+  format: PdfImageFormat;
+};
+
+export type PdfRenderResult = {
+  images: RenderedPdfPage[];
+  totalSize: number;
+  pageCount: number;
+  options: PdfRenderOptions;
+};
+
+export type PdfRenderEstimate = {
+  pages: number[];
+  dimensions: Array<{ pageNumber: number; width: number; height: number }>;
+  totalPixels: number;
+  estimatedMemory: number;
 };

@@ -19,7 +19,13 @@ export type PdfProcessingErrorCode =
   | "zip-failed"
   | "image-embed-failed"
   | "image-pdf-too-large"
-  | "image-pdf-failed";
+  | "image-pdf-failed"
+  | "renderer-unavailable"
+  | "renderer-load-failed"
+  | "render-dimension-too-large"
+  | "render-workload-too-large"
+  | "render-failed"
+  | "canvas-export-failed";
 
 export class PdfProcessingError extends Error {
   constructor(

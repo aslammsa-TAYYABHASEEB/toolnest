@@ -46,3 +46,15 @@ export function makeImagesToPdfFilename(sourceFilenames: string[]) {
     .trim();
   return `${base || "image"}.pdf`;
 }
+
+export function makePdfPageImageFilename(
+  sourceFilename: string,
+  pageNumber: number,
+  extension: "jpg" | "png",
+) {
+  return `${cleanPdfBaseName(sourceFilename)}-page-${pageNumber}.${extension}`;
+}
+
+export function makePdfImagesZipFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}-pdf-images.zip`;
+}

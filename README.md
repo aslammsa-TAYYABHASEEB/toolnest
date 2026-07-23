@@ -1,6 +1,6 @@
 # ToolNest
 
-ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
+ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. PDF to JPG, JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
 
 ## Project status
 
@@ -77,6 +77,14 @@ ToolNest is a mobile-first collection of fast, approachable everyday browser too
 - Direct JPG/PNG embedding with local WebP-to-PNG preparation and explicit transparency backgrounds
 - 20 MB per-image, 100 MB total, 100-image, 64-megapixel per-image, 160-megapixel combined, and 200 MB output limits
 
+### Sprint 9 — PDF to JPG
+
+- Browser-only PDF page rendering to JPG or PNG at `/tools/pdf-to-jpg`
+- All-page, selected-page, and range modes with shared expression parsing
+- JPG quality, 1× to 3× render scale, live output planning, thumbnails, individual downloads, and ZIP packaging
+- 100 MB input, 1,000 source-page, 100 output-image, 8,192-pixel dimension, and 120-megapixel workload limits
+- Mozilla PDF.js rendering with sequential canvas processing and temporary URL cleanup
+
 ## Technology stack
 
 - [Next.js 15](https://nextjs.org/) with the App Router
@@ -89,7 +97,7 @@ ToolNest is a mobile-first collection of fast, approachable everyday browser too
 
 Requirements:
 
-- Node.js 20 or newer
+- Node.js 20.19 or newer
 - npm
 
 Clone the intended repository, then install the locked dependencies:
@@ -148,6 +156,7 @@ components/
   image-tool/         Shared browser image tool components
   image-resizer.tsx   Image Resizer interface and workflow
   jpg-to-pdf.tsx      JPG to PDF interface and workflow
+  pdf-to-jpg.tsx      PDF to JPG/PNG interface and workflow
   pdf-tool/           Shared browser PDF tool components
   pdf-merge.tsx       PDF Merge interface and workflow
   pdf-split.tsx       PDF Split interface and workflow
@@ -166,7 +175,7 @@ lib/
 
 ## Current limitations
 
-- JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
+- PDF to JPG, JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
 - No PDF rotate/organize/delete, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
 - Category upload previews, search, and contact controls remain interface previews only.
 - There is no backend, database, API, authentication, payment flow, or account system.
