@@ -34,7 +34,7 @@ export default async function CategoryPage({ params }: PageProps) {
   const availableDescription = category.slug === "image-tools"
     ? "Image Resizer, Image Compressor, and Image Converter handle JPG, PNG, and WebP entirely on your device."
     : category.slug === "pdf-tools"
-      ? "PDF Merge and PDF Split organize documents, while JPG to PDF and PDF to JPG convert between documents and images entirely on your device."
+      ? "PDF Merge, PDF Split, and PDF Rotate organize documents, while JPG to PDF and PDF to JPG convert between documents and images entirely on your device."
       : "";
 
   return (

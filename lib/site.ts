@@ -63,6 +63,7 @@ export const tools: Tool[] = [
   { name: "PDF Split", description: "Extract pages or divide a PDF into private browser downloads.", category: "pdf-tools", icon: "S", popular: true, available: true, href: "/tools/pdf-split" },
   { name: "JPG to PDF", description: "Turn ordered JPG, PNG, and WebP images into one private PDF.", category: "pdf-tools", icon: "J", popular: true, available: true, href: "/tools/jpg-to-pdf" },
   { name: "PDF to JPG", description: "Render PDF pages as private JPG or PNG image downloads.", category: "pdf-tools", icon: "I", popular: true, available: true, href: "/tools/pdf-to-jpg" },
+  { name: "PDF Rotate", description: "Rotate all or selected PDF pages without flattening their content.", category: "pdf-tools", icon: "R", popular: true, available: true, href: "/tools/pdf-rotate" },
   { name: "Compress PDF", description: "Reduce PDF file size while keeping it readable.", category: "pdf-tools", icon: "C", popular: true },
   { name: "PDF to Word", description: "Prepare PDF documents for Word conversion.", category: "pdf-tools", icon: "W" },
   { name: "Image Resizer", description: "Resize JPG, PNG, and WebP images privately by pixels or percentage.", category: "image-tools", icon: "R", popular: true, available: true, href: "/tools/image-resizer" },

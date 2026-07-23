@@ -25,7 +25,11 @@ export type PdfProcessingErrorCode =
   | "render-dimension-too-large"
   | "render-workload-too-large"
   | "render-failed"
-  | "canvas-export-failed";
+  | "canvas-export-failed"
+  | "rotation-no-op"
+  | "rotation-failed"
+  | "rotation-output-too-large"
+  | "thumbnail-failed";
 
 export class PdfProcessingError extends Error {
   constructor(

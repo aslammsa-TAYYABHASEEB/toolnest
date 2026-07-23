@@ -58,3 +58,7 @@ export function makePdfPageImageFilename(
 export function makePdfImagesZipFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}-pdf-images.zip`;
 }
+
+export function makeRotatedPdfFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}-rotated.pdf`;
+}

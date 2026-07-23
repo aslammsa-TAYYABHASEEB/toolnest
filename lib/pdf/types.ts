@@ -10,6 +10,10 @@ export const MAX_PDF_RENDER_OUTPUTS = 100;
 export const MAX_PDF_RENDER_DIMENSION = 8192;
 export const MAX_PDF_RENDER_TOTAL_PIXELS = 120 * 1024 * 1024;
 export const MAX_PDF_RENDER_MEMORY = 512 * 1024 * 1024;
+export const MAX_PDF_ROTATE_SOURCE_PAGES = 500;
+export const MAX_PDF_ROTATE_THUMBNAILS = 40;
+export const MAX_PDF_ROTATE_THUMBNAIL_PIXELS = 6 * 1024 * 1024;
+export const MAX_PDF_ROTATE_OUTPUT_SIZE = 200 * 1024 * 1024;
 
 export type PdfMergeStatus =
   | "idle"
@@ -128,4 +132,27 @@ export type PdfRenderEstimate = {
   dimensions: Array<{ pageNumber: number; width: number; height: number }>;
   totalPixels: number;
   estimatedMemory: number;
+};
+
+export type PdfQuarterRotation = 0 | 90 | 180 | 270;
+export type PdfPendingRotation = Record<number, PdfQuarterRotation>;
+
+export type PdfRotationSource = PdfFileMetadata & {
+  originalRotations: PdfQuarterRotation[];
+};
+
+export type PdfThumbnail = {
+  blob: Blob;
+  pageNumber: number;
+  width: number;
+  height: number;
+};
+
+export type PdfRotationResult = {
+  blob: Blob;
+  filename: string;
+  size: number;
+  pageCount: number;
+  rotatedPageCount: number;
+  effectiveRotations: PdfQuarterRotation[];
 };

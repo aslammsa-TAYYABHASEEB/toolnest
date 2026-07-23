@@ -89,6 +89,25 @@ function compactPageLabel(pages: number[]) {
   return parts.join("-");
 }
 
+export function formatPageSelection(pages: number[]) {
+  if (pages.length === 0) return "";
+  const sorted = Array.from(new Set(pages)).sort((a, b) => a - b);
+  const parts: string[] = [];
+  let start = sorted[0];
+  let end = start;
+  for (const page of sorted.slice(1)) {
+    if (page === end + 1) {
+      end = page;
+      continue;
+    }
+    parts.push(start === end ? `${start}` : `${start}-${end}`);
+    start = page;
+    end = page;
+  }
+  parts.push(start === end ? `${start}` : `${start}-${end}`);
+  return parts.join(",");
+}
+
 export function parsePageSelection(
   value: string,
   pageCount: number,

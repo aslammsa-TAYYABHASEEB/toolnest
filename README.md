@@ -1,6 +1,6 @@
 # ToolNest
 
-ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. PDF to JPG, JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
+ToolNest is a mobile-first collection of fast, approachable everyday browser tools. The foundation includes navigation, discovery, reusable interface components, theme support, accessibility, and SEO-ready routes. PDF Rotate, PDF to JPG, JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer all run locally in the browser.
 
 ## Project status
 
@@ -85,6 +85,15 @@ ToolNest is a mobile-first collection of fast, approachable everyday browser too
 - 100 MB input, 1,000 source-page, 100 output-image, 8,192-pixel dimension, and 120-megapixel workload limits
 - Mozilla PDF.js rendering with sequential canvas processing and temporary URL cleanup
 
+### Sprint 10 â€” PDF Rotate
+
+- Browser-only PDF page rotation at `/tools/pdf-rotate`
+- All-page, page-expression, and individual-card selection with synchronized controls
+- Clockwise, counter-clockwise, 180-degree, and reset actions with original, pending, and effective orientation details
+- pdf-lib metadata rotation preserves page order, dimensions, selectable text, and vector graphics
+- PDF.js renders up to 40 compact sequential thumbnails while all-page rotation supports documents up to 500 pages
+- Password-protected PDFs are unsupported; large documents remain subject to browser memory, and saving changes may invalidate existing digital signatures
+
 ## Technology stack
 
 - [Next.js 15](https://nextjs.org/) with the App Router
@@ -157,6 +166,7 @@ components/
   image-resizer.tsx   Image Resizer interface and workflow
   jpg-to-pdf.tsx      JPG to PDF interface and workflow
   pdf-to-jpg.tsx      PDF to JPG/PNG interface and workflow
+  pdf-rotate.tsx      PDF Rotate interface and workflow
   pdf-tool/           Shared browser PDF tool components
   pdf-merge.tsx       PDF Merge interface and workflow
   pdf-split.tsx       PDF Split interface and workflow
@@ -175,8 +185,8 @@ lib/
 
 ## Current limitations
 
-- PDF to JPG, JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
-- No PDF rotate/organize/delete, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
+- PDF Rotate, PDF to JPG, JPG to PDF, PDF Merge, PDF Split, Image Converter, Image Compressor, and Image Resizer are available; all unfinished tools are marked **Coming soon**.
+- No PDF organize/delete, text, calculator, video, audio, OCR, QR, AI, or other processing logic exists.
 - Category upload previews, search, and contact controls remain interface previews only.
 - There is no backend, database, API, authentication, payment flow, or account system.
 - Legal copy is placeholder content and requires appropriate review before a public launch.
