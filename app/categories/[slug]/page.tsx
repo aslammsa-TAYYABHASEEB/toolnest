@@ -35,7 +35,9 @@ export default async function CategoryPage({ params }: PageProps) {
     ? "Image Resizer, Image Compressor, and Image Converter handle JPG, PNG, and WebP entirely on your device."
     : category.slug === "pdf-tools"
       ? "PDF Merge, PDF Split, and PDF Rotate organize documents, while JPG to PDF and PDF to JPG convert between documents and images entirely on your device."
-      : "";
+      : category.slug === "text-tools"
+        ? "QR Code Generator turns text, links, Wi-Fi details, messages, and contacts into downloadable QR codes entirely on your device."
+        : "";
 
   return (
     <>
