@@ -36,7 +36,7 @@ export default async function CategoryPage({ params }: PageProps) {
     : category.slug === "pdf-tools"
       ? "PDF Merge, PDF Split, and PDF Rotate organize documents, while JPG to PDF and PDF to JPG convert between documents and images entirely on your device."
       : category.slug === "text-tools"
-        ? "QR Code Generator turns text, links, Wi-Fi details, messages, and contacts into downloadable QR codes entirely on your device."
+        ? "JSON Formatter validates and prepares JSON, while QR Code Generator turns text and details into downloadable QR codes entirely on your device."
         : "";
 
   return (

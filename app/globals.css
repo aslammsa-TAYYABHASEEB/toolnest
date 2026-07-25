@@ -537,6 +537,38 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .qr-download-actions .ui-button { width: 100%; }
 .qr-copy-note { margin: calc(var(--space-2) * -1) 0 0; color: var(--color-text-subtle); font-size: var(--text-xs); line-height: 1.5; }
 .qr-preview-card > .ui-button { justify-self: start; }
+.json-tool-shell, .json-workspace, .json-panel { min-width: 0; }
+.json-tool-shell { display: grid; gap: var(--space-4); }
+.json-tool-shell .privacy-banner { margin-bottom: 0; }
+.json-workspace { display: grid; gap: var(--space-4); align-items: start; }
+.json-panel { display: grid; gap: var(--space-4); padding: var(--space-4); }
+.json-panel-heading { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.json-panel-heading h2 { margin: var(--space-1) 0 0; font-size: var(--text-xl); }
+.json-panel-heading > span { max-width: 11rem; color: var(--color-text-subtle); font-size: var(--text-xs); text-align: right; overflow-wrap: anywhere; }
+.json-editor-label { color: var(--color-text); font-size: var(--text-xs); font-weight: 800; }
+.json-editor { width: 100%; min-width: 0; min-height: 19rem; padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); outline: 0; background: var(--color-surface-muted); color: var(--color-text); box-shadow: inset 0 1px 2px color-mix(in srgb, var(--color-text) 5%, transparent); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: .8rem; line-height: 1.55; tab-size: 2; resize: vertical; transition: border-color var(--duration-fast), box-shadow var(--duration-fast), background-color var(--duration-normal); }
+.json-editor::placeholder { color: var(--color-text-subtle); }
+.json-editor:hover:not(:disabled) { border-color: var(--color-border-strong); }
+.json-editor:focus-visible { border-color: var(--color-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent); }
+.json-editor:disabled { cursor: wait; opacity: .7; }
+.json-editor[readonly] { background: var(--color-surface); }
+.json-file-row { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.json-file-row > div { min-width: 0; display: grid; gap: .15rem; }
+.json-file-row strong { overflow: hidden; color: var(--color-text); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.json-file-row span { color: var(--color-text-muted); font-size: .68rem; line-height: 1.4; }
+.json-file-row .ui-button { width: 100%; }
+.json-primary-actions, .json-output-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.json-primary-actions .ui-button, .json-output-actions .ui-button { width: 100%; }
+.json-live-status:empty { display: none; }
+.json-status { display: grid; gap: .2rem; padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+.json-status strong { color: var(--color-text); font-size: var(--text-sm); }
+.json-status p { margin: 0; color: var(--color-text-muted); font-size: var(--text-xs); line-height: 1.5; overflow-wrap: anywhere; }
+.json-status small { color: var(--color-text-muted); font-size: var(--text-xs); font-weight: 750; }
+.json-status-success { border-color: color-mix(in srgb, var(--color-success-500) 30%, var(--color-border)); background: color-mix(in srgb, var(--color-success-500) 8%, var(--color-surface)); }
+.json-status-error { border-color: color-mix(in srgb, var(--color-danger-500) 30%, var(--color-border)); background: color-mix(in srgb, var(--color-danger-500) 8%, var(--color-surface)); }
+.json-status-error strong, .json-status-error small { color: var(--color-danger-500); }
+.json-status-neutral { border-color: color-mix(in srgb, var(--color-brand-500) 25%, var(--color-border)); background: var(--color-surface-brand); }
+.json-format-copy { margin-top: var(--space-12); }
 .legal-wrap { width: min(calc(100% - 2rem), 51rem); margin: 0 auto; padding-block: var(--space-12) var(--space-20); }
 .legal-content { padding: var(--space-6); box-shadow: var(--shadow-md); }
 .legal-content > section { padding: var(--space-6) 0; border-bottom: 1px solid var(--color-border); }
@@ -637,6 +669,11 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
   .qr-vcard-grid > .input-field:last-child { grid-column: 1 / -1; }
   .qr-error-correction > div { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .qr-download-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .json-panel { padding: var(--space-5); }
+  .json-file-row { flex-direction: row; align-items: center; justify-content: space-between; }
+  .json-file-row .ui-button { width: auto; flex: 0 0 auto; }
+  .json-primary-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .json-output-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (min-width: 56.25rem) {
@@ -659,6 +696,8 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
   .image-pdf-workspace { grid-template-columns: minmax(0, 1.2fr) minmax(18rem, .8fr); align-items: start; }
   .qr-workspace { grid-template-columns: minmax(0, 1.15fr) minmax(19rem, .85fr); }
   .qr-preview-card { position: sticky; top: 6rem; }
+  .json-workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .json-editor { min-height: 27rem; }
 }
 
 @media (min-width: 68rem) {
