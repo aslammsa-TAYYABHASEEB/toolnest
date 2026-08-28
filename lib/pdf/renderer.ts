@@ -56,6 +56,7 @@ export async function loadPdfRendererDocument(file: File) {
     });
     return await loadingTask.promise;
   } catch (caught) {
+    console.error("PDF renderer raw error:", caught);
     throw rendererError(caught, file.name);
   }
 }
