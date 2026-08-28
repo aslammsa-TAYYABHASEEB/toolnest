@@ -156,3 +156,28 @@ export type PdfRotationResult = {
   rotatedPageCount: number;
   effectiveRotations: PdfQuarterRotation[];
 };
+
+export type CompressionLevel = "light" | "balanced" | "strong";
+
+export type CompressedPdf = {
+  blob: Blob;
+  filename: string;
+  size: number;
+  pageCount: number;
+  originalSize: number;
+  savedBytes: number;
+  savedPercentage: number;
+  hasSavings: boolean;
+  level: CompressionLevel;
+};
+
+// Compress PDF constants
+export const MAX_PDF_COMPRESS_SOURCE_PAGES = 1000;
+export const MAX_PDF_COMPRESS_RASTER_PAGES = 100;
+export const MAX_PDF_COMPRESS_OUTPUT_SIZE = 200 * 1024 * 1024;
+
+// Rasterized mode render presets (tunable after QA)
+export const COMPRESS_BALANCED_SCALE = 1.5;
+export const COMPRESS_BALANCED_JPEG_QUALITY = 0.80;
+export const COMPRESS_STRONG_SCALE = 1.0;
+export const COMPRESS_STRONG_JPEG_QUALITY = 0.60;

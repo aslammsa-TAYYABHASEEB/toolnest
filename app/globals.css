@@ -349,8 +349,8 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .pdf-merge-result .ui-button { grid-column: 1 / -1; width: 100%; }
 .pdf-status > p:not(.converter-error) { margin: var(--space-4) 0 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-brand); color: var(--color-brand-700); font-size: var(--text-sm); font-weight: 750; }
 .pdf-status:empty { display: none; }
-.pdf-split-shell { min-width: 0; }
-.pdf-split-panel { min-width: 0; padding: var(--space-4); }
+.pdf-split-shell, .pdf-compress-shell { min-width: 0; }
+.pdf-split-panel, .pdf-compress-panel { min-width: 0; padding: var(--space-4); }
 .pdf-source-summary { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-3); padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-border); }
 .pdf-source-summary .pdf-file-icon.is-visible { width: 2.75rem; height: 2.75rem; display: grid; place-items: center; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-danger-500) 10%, var(--color-surface)); }
 .pdf-source-summary .ui-button { grid-column: 1 / -1; width: 100%; }
@@ -552,6 +552,7 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .json-editor:focus-visible { border-color: var(--color-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 20%, transparent); }
 .json-editor:disabled { cursor: wait; opacity: .7; }
 .json-editor[readonly] { background: var(--color-surface); }
+.text-editor-container .json-editor, .word-counter-shell .json-editor, .case-converter-shell .json-editor, .text-cleaner-shell .json-editor { min-height: 10rem; max-height: 20rem; overflow-y: auto; }
 .json-file-row { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .json-file-row > div { min-width: 0; display: grid; gap: .15rem; }
 .json-file-row strong { overflow: hidden; color: var(--color-text); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
@@ -698,6 +699,7 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
   .qr-preview-card { position: sticky; top: 6rem; }
   .json-workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .json-editor { min-height: 27rem; }
+  .text-editor-container .json-editor, .word-counter-shell .json-editor, .case-converter-shell .json-editor, .text-cleaner-shell .json-editor { min-height: 13.5rem; max-height: 24rem; }
 }
 
 @media (min-width: 68rem) {

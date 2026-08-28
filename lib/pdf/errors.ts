@@ -28,8 +28,11 @@ export type PdfProcessingErrorCode =
   | "canvas-export-failed"
   | "rotation-no-op"
   | "rotation-failed"
-  | "rotation-output-too-large"
-  | "thumbnail-failed";
+   | "rotation-output-too-large"
+   | "thumbnail-failed"
+   | "compress-failed"
+   | "compression-output-too-large"
+   | "compression-workload-too-large";
 
 export class PdfProcessingError extends Error {
   constructor(

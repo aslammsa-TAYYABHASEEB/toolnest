@@ -62,3 +62,7 @@ export function makePdfImagesZipFilename(sourceFilename: string) {
 export function makeRotatedPdfFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}-rotated.pdf`;
 }
+
+export function makeCompressedPdfFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}-compressed.pdf`;
+}
