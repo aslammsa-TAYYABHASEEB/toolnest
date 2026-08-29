@@ -153,46 +153,45 @@ export function PercentageCalculator() {
       </div>
 
       <Card className="p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+          <button
+            type="button"
+            className={`btn btn-ghost ${mode === "percent-of" ? "active" : ""}`}
+            aria-pressed={mode === "percent-of"}
+            onClick={() => handleModeChange("percent-of")}
+            data-mode="percent-of"
+          >
+            {getModeLabel("percent-of")}
+          </button>
+          <button
+            type="button"
+            className={`btn btn-ghost ${mode === "is-what-percent" ? "active" : ""}`}
+            aria-pressed={mode === "is-what-percent"}
+            onClick={() => handleModeChange("is-what-percent")}
+            data-mode="is-what-percent"
+          >
+            {getModeLabel("is-what-percent")}
+          </button>
+          <button
+            type="button"
+            className={`btn btn-ghost ${mode === "percent-change" ? "active" : ""}`}
+            aria-pressed={mode === "percent-change"}
+            onClick={() => handleModeChange("percent-change")}
+            data-mode="percent-change"
+          >
+            {getModeLabel("percent-change")}
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <button
-              type="button"
-              className={`btn btn-ghost ${mode === "percent-of" ? "active" : ""}`}
-              aria-pressed={mode === "percent-of"}
-              onClick={() => handleModeChange("percent-of")}
-              data-mode="percent-of"
-            >
-              {getModeLabel("percent-of")}
-            </button>
-            <button
-              type="button"
-              className={`btn btn-ghost ${mode === "is-what-percent" ? "active" : ""}`}
-              aria-pressed={mode === "is-what-percent"}
-              onClick={() => handleModeChange("is-what-percent")}
-              data-mode="is-what-percent"
-            >
-              {getModeLabel("is-what-percent")}
-            </button>
-            <button
-              type="button"
-              className={`btn btn-ghost ${mode === "percent-change" ? "active" : ""}`}
-              aria-pressed={mode === "percent-change"}
-              onClick={() => handleModeChange("percent-change")}
-              data-mode="percent-change"
-            >
-              {getModeLabel("percent-change")}
-            </button>
-          </div>
-
           <div className="lg:col-span-7">
             <Card className="p-4">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                {/* POLISH FIX 1: Remove debug {mode} from heading */}
                 {getModeLabel(mode)}
               </h3>
-              <p className="text-sm text-muted-foreground mb-4">{getModeDescription(mode)}</p>
-
+              <p className="text-sm text-muted-foreground mb-4">
+                {getModeDescription(mode)}
+              </p>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <label htmlFor="input-a" className="text-xs font-medium">
                   {inputALabel}
@@ -221,7 +220,6 @@ export function PercentageCalculator() {
                 />
               </div>
 
-              {/* POLISH FIX 2: Use actual direction from result instead of string matching */}
               {mode === "percent-change" && (
                 <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
                   <p>
