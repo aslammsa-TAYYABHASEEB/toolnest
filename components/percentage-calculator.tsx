@@ -153,35 +153,21 @@ export function PercentageCalculator() {
       </div>
 
       <Card className="p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
-          <button
-            type="button"
-            className={`btn btn-ghost ${mode === "percent-of" ? "active" : ""}`}
-            aria-pressed={mode === "percent-of"}
-            onClick={() => handleModeChange("percent-of")}
-            data-mode="percent-of"
-          >
-            {getModeLabel("percent-of")}
-          </button>
-          <button
-            type="button"
-            className={`btn btn-ghost ${mode === "is-what-percent" ? "active" : ""}`}
-            aria-pressed={mode === "is-what-percent"}
-            onClick={() => handleModeChange("is-what-percent")}
-            data-mode="is-what-percent"
-          >
-            {getModeLabel("is-what-percent")}
-          </button>
-          <button
-            type="button"
-            className={`btn btn-ghost ${mode === "percent-change" ? "active" : ""}`}
-            aria-pressed={mode === "percent-change"}
-            onClick={() => handleModeChange("percent-change")}
-            data-mode="percent-change"
-          >
-            {getModeLabel("percent-change")}
-          </button>
-        </div>
+        <fieldset className="percentage-mode-selector">
+          <legend className="sr-only">Calculation type</legend>
+          <label className={mode === "percent-of" ? "is-selected" : ""}>
+            <input type="radio" name="percentage-mode" value="percent-of" checked={mode === "percent-of"} onChange={() => handleModeChange("percent-of")} />
+            <span><strong>{getModeLabel("percent-of")}</strong></span>
+          </label>
+          <label className={mode === "is-what-percent" ? "is-selected" : ""}>
+            <input type="radio" name="percentage-mode" value="is-what-percent" checked={mode === "is-what-percent"} onChange={() => handleModeChange("is-what-percent")} />
+            <span><strong>{getModeLabel("is-what-percent")}</strong></span>
+          </label>
+          <label className={mode === "percent-change" ? "is-selected" : ""}>
+            <input type="radio" name="percentage-mode" value="percent-change" checked={mode === "percent-change"} onChange={() => handleModeChange("percent-change")} />
+            <span><strong>{getModeLabel("percent-change")}</strong></span>
+          </label>
+        </fieldset>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-7">

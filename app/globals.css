@@ -707,6 +707,60 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
   .desktop-nav { margin-left: 0; }
 }
 
+.percentage-mode-selector {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.percentage-mode-selector legend {
+  margin-bottom: var(--space-3);
+  color: var(--color-text);
+  font-size: var(--text-base);
+  font-weight: 800;
+}
+
+.percentage-mode-selector > label {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast), color var(--duration-fast);
+}
+
+.percentage-mode-selector label:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.percentage-mode-selector label.is-selected {
+  border-color: var(--color-brand-500);
+  background: var(--color-surface-brand);
+  color: var(--color-brand-700);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand-500) 10%, transparent);
+}
+
+.percentage-mode-selector input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.percentage-mode-selector label:has(input:focus-visible) {
+  outline: 3px solid color-mix(in srgb, var(--color-focus) 46%, transparent);
+  outline-offset: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
