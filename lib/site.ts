@@ -84,7 +84,7 @@ export const tools: Tool[] = [
   { name: "JSON Formatter & Validator", description: "Format, minify, and validate JSON privately in your browser.", category: "text-tools", icon: "{}", popular: true, available: true, href: "/tools/json-formatter" },
   { name: "Case Converter", description: "Switch text between uppercase and lowercase styles.", category: "text-tools", icon: "Aa", available: true, href: "/tools/case-converter" },
   { name: "Remove Extra Spaces", description: "Clean repeated spaces and untidy line breaks.", category: "text-tools", icon: "¶", available: true, href: "/tools/remove-extra-spaces" },
-  { name: "Percentage Calculator", description: "Solve common percentage questions quickly.", category: "calculators", icon: "%", popular: true },
+  { name: "Percentage Calculator", description: "Solve common percentage questions quickly.", category: "calculators", icon: "%", popular: true, available: true, href: "/tools/percentage-calculator" },
   { name: "Age Calculator", description: "Calculate age between two selected dates.", category: "calculators", icon: "A" },
   { name: "Unit Converter", description: "Convert common length, weight, and temperature units.", category: "calculators", icon: "⇄" },
 ];
