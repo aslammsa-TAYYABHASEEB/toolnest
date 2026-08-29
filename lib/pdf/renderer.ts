@@ -44,10 +44,7 @@ export async function loadPdfRendererDocument(file: File) {
 
   try {
     const pdfjs = await import("pdfjs-dist");
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/build/pdf.worker.min.mjs",
-      import.meta.url,
-    ).toString();
+    pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(await file.arrayBuffer()),
@@ -56,10 +53,6 @@ export async function loadPdfRendererDocument(file: File) {
     });
     return await loadingTask.promise;
   } catch (caught) {
-    console.error("PDF renderer raw error - full detail:", caught);
-    console.error("Error name:", (caught as Error)?.name);
-    console.error("Error message:", (caught as Error)?.message);
-    console.error("Error stack:", (caught as Error)?.stack);
     throw rendererError(caught, file.name);
   }
 }
