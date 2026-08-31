@@ -30,9 +30,13 @@ export type PdfProcessingErrorCode =
   | "rotation-failed"
    | "rotation-output-too-large"
    | "thumbnail-failed"
-   | "compress-failed"
-   | "compression-output-too-large"
-   | "compression-workload-too-large";
+    | "compress-failed"
+    | "compression-output-too-large"
+    | "compression-workload-too-large"
+    | "word-conversion-failed"
+    | "word-output-too-large"
+    | "word-workload-too-large"
+    | "word-no-text-found";
 
 export class PdfProcessingError extends Error {
   constructor(

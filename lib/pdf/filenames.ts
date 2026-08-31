@@ -66,3 +66,7 @@ export function makeRotatedPdfFilename(sourceFilename: string) {
 export function makeCompressedPdfFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}-compressed.pdf`;
 }
+
+export function makeWordFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}.docx`;
+}

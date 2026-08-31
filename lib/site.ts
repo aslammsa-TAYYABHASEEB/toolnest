@@ -75,7 +75,7 @@ export const tools: Tool[] = [
   { name: "PDF to JPG", description: "Render PDF pages as private JPG or PNG image downloads.", category: "pdf-tools", icon: "I", popular: true, available: true, href: "/tools/pdf-to-jpg" },
   { name: "PDF Rotate", description: "Rotate all or selected PDF pages without flattening their content.", category: "pdf-tools", icon: "R", popular: true, available: true, href: "/tools/pdf-rotate" },
   { name: "Compress PDF", description: "Reduce PDF file size while keeping it readable.", category: "pdf-tools", icon: "C", popular: true, available: true, href: "/tools/pdf-compress" },
-  { name: "PDF to Word", description: "Prepare PDF documents for Word conversion.", category: "pdf-tools", icon: "W" },
+  { name: "PDF to Word", description: "Convert PDF text to a downloadable Word document privately in your browser.", category: "pdf-tools", icon: "W", available: true, href: "/tools/pdf-to-word" },
   { name: "Image Resizer", description: "Resize JPG, PNG, and WebP images privately by pixels or percentage.", category: "image-tools", icon: "R", popular: true, available: true, href: "/tools/image-resizer" },
   { name: "Image Compressor", description: "Reduce JPG, PNG, and WebP file sizes privately in your browser.", category: "image-tools", icon: "C", popular: true, available: true, href: "/tools/image-compressor" },
   { name: "Image Converter", description: "Convert JPG, PNG, and WebP images privately in your browser.", category: "image-tools", icon: "↻", available: true, href: "/tools/image-converter" },

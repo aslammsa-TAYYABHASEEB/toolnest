@@ -171,10 +171,21 @@ export type CompressedPdf = {
   level: CompressionLevel;
 };
 
+export type WordConversionResult = {
+  blob: Blob;
+  filename: string;
+  size: number;
+  pageCount: number;
+};
+
 // Compress PDF constants
 export const MAX_PDF_COMPRESS_SOURCE_PAGES = 1000;
 export const MAX_PDF_COMPRESS_RASTER_PAGES = 100;
 export const MAX_PDF_COMPRESS_OUTPUT_SIZE = 200 * 1024 * 1024;
+
+// Word conversion constants
+export const MAX_PDF_TO_WORD_SOURCE_PAGES = 300;
+export const MAX_PDF_TO_WORD_OUTPUT_SIZE = 50 * 1024 * 1024;
 
 // Rasterized mode render presets (tunable after QA)
 export const COMPRESS_BALANCED_SCALE = 1.5;
