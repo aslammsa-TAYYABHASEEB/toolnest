@@ -62,6 +62,10 @@ export async function convertPdfToWord(
       );
     }
 
+    // Dynamic import of pdfjs-dist to avoid DOMMatrix error during Next.js prerendering
+    const pdfjsModule = await import("pdfjs-dist");
+    const { OPS } = pdfjsModule;
+
     const allChildren: Paragraph[] = [];
     let totalTextLength = 0;
 
@@ -79,6 +83,29 @@ export async function convertPdfToWord(
           allChildren.push(new Paragraph({ children: [new TextRun(text)] }));
           totalTextLength += text.length;
         }
+
+        // --- Detect if page contains images (presence check only) ---
+        const operatorList = await page.getOperatorList();
+        let pageHasImages = false;
+        for (let j = 0; j < operatorList.fnArray.length; j++) {
+          if (operatorList.fnArray[j] === OPS.paintImageXObject) {
+            pageHasImages = true;
+            break;
+          }
+        }
+
+        // --- Add note paragraph if page has images ---
+        if (pageHasImages) {
+          allChildren.push(new Paragraph({
+            children: [
+              new TextRun({
+                text: "[This page contains one or more images that are not included in this text extraction.]",
+                italics: true,
+              }),
+            ],
+          }));
+        }
+
         if (i < pageCount - 1) {
           allChildren.push(new Paragraph({ children: [new PageBreak()] }));
         }

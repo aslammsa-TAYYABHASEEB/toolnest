@@ -35,7 +35,7 @@ const faqs = [
     question:
       "What types of PDFs work best?",
     answer:
-      "Text-heavy PDFs convert most reliably. PDFs with complex layouts, tables, columns, or many images may lose that formatting in the Word output, as this tool extracts text rather than preserving exact layout.",
+      "Text-heavy PDFs convert most reliably. PDFs with complex layouts, tables, columns, or many images may lose that formatting in the Word output, as this tool extracts text rather than preserving exact layout. If a page contains images, the Word document will include a note on that page indicating images were present but not embedded.",
   },
   {
     question:
