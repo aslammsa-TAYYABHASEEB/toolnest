@@ -56,3 +56,6 @@ Thumbs.db
 
 # tesseract.js OCR assets (copied from node_modules at install time)
 public/tesseract/
+
+# Tesseract language data from local Node-side testing (browser fetches from CDN at runtime)
+eng.traineddata
