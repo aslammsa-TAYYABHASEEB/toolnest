@@ -19,19 +19,39 @@ function assertNotAborted(signal?: AbortSignal) {
 function groupTextItemsIntoParagraphs(
   items: { str: string; transform: number[] }[],
 ): string[] {
+  const DEFAULT_FONT_SIZE = 14.4;
   const paragraphs: string[] = [];
   let currentParagraph = "";
   let lastY = -Infinity;
+  let paragraphFontSize = 0; // max font size seen in the current paragraph
+
+  const fontSizeOf = (item: { transform: number[] }) =>
+    Math.hypot(item.transform[2], item.transform[3]) || 0;
 
   for (const item of items) {
+    // Skip empty/whitespace-only items: they must not create fake line
+    // transitions or reset lastY / paragraphFontSize.
+    if (!item.str || !item.str.trim()) continue;
+
+    const fontSize = fontSizeOf(item);
+    // Reference line height is the max font size seen so far in this
+    // paragraph, so superscripts/inline size changes can't cause false breaks.
+    const referenceFontSize = Math.max(paragraphFontSize, fontSize) || DEFAULT_FONT_SIZE;
     const y = item.transform[5];
-    if (lastY - y > 5) {
+    const gap = lastY === -Infinity ? Infinity : lastY - y;
+
+    if (currentParagraph && gap > 1.6 * referenceFontSize) {
+      // New paragraph: gap far exceeds one line height.
       if (currentParagraph.trim()) {
         paragraphs.push(currentParagraph.trim());
       }
       currentParagraph = item.str;
+      paragraphFontSize = fontSize;
     } else {
+      // Same line (gap <= 0.4x) or wrapped continuation line (0.4x < gap
+      // <= 1.6x): merge into the current paragraph.
       currentParagraph += (currentParagraph ? " " : "") + item.str;
+      paragraphFontSize = Math.max(paragraphFontSize, fontSize);
     }
     lastY = y;
   }
