@@ -25,7 +25,7 @@ function groupTextItemsIntoParagraphs(
 
   for (const item of items) {
     const y = item.transform[5];
-    if (y - lastY > 5) {
+    if (lastY - y > 5) {
       if (currentParagraph.trim()) {
         paragraphs.push(currentParagraph.trim());
       }
@@ -76,9 +76,21 @@ export async function convertPdfToWord(
       const page = await document.getPage(i + 1);
       try {
         const textContent = await page.getTextContent();
-        const paragraphs = groupTextItemsIntoParagraphs(
-          textContent.items as { str: string; transform: number[] }[],
-        );
+        // pdfjs-dist returns text items in raw content-stream order, which is
+        // not guaranteed to match reading order. Sort a copy by Y (descending:
+        // top of page first, since PDF Y grows upward), then by X (ascending:
+        // left to right within the same line, using the same 5-unit tolerance
+        // as groupTextItemsIntoParagraphs).
+        const items = [...textContent.items] as {
+          str: string;
+          transform: number[];
+        }[];
+        items.sort((a, b) => {
+          const yDiff = b.transform[5] - a.transform[5];
+          if (Math.abs(yDiff) > 5) return yDiff;
+          return a.transform[4] - b.transform[4];
+        });
+        const paragraphs = groupTextItemsIntoParagraphs(items);
         for (const text of paragraphs) {
           allChildren.push(new Paragraph({ children: [new TextRun(text)] }));
           totalTextLength += text.length;
