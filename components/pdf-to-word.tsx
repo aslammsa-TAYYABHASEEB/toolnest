@@ -39,7 +39,12 @@ export function PdfToWord() {
   const [status, setStatus] = useState<PdfToWordStatus>("idle");
   const [error, setError] = useState<PdfProcessingError | null>(null);
   const [result, setResult] = useState<WordConversionResult | null>(null);
-  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+    phase: "extracting" | "ocr" | "ocr-download";
+    subProgress: number | null;
+  } | null>(null);
   const download = usePdfDownload();
   const busy = status === "preparing" || status === "converting";
 
@@ -89,7 +94,14 @@ export function PdfToWord() {
     try {
       const nextResult = await convertPdfToWord(
         source.file,
-        (current, total) => setProgress({ current, total }),
+        (current, total, phase, subProgress) => {
+          setProgress({
+            current,
+            total,
+            phase: phase ?? "extracting",
+            subProgress: typeof subProgress === "number" ? subProgress : null,
+          });
+        },
       );
       download.replace(nextResult.blob, makeWordFilename(source.file.name));
       setResult({
@@ -172,7 +184,15 @@ export function PdfToWord() {
             <Button size="lg" onClick={() => void convert()} disabled={!canConvert}>
               {status === "converting"
                 ? progress
-                  ? `Converting… page ${progress.current} of ${progress.total}`
+                  ? progress.phase === "ocr-download"
+                    ? progress.subProgress !== null
+                      ? `Downloading OCR engine (one-time)… ${Math.round(progress.subProgress * 100)}%`
+                      : "Downloading OCR engine (one-time)…"
+                    : progress.phase === "ocr"
+                      ? progress.subProgress !== null
+                        ? `Running on-device OCR… page ${progress.current} of ${progress.total} (${Math.round(progress.subProgress * 100)}%)`
+                        : `Running on-device OCR… page ${progress.current} of ${progress.total}`
+                      : `Converting… page ${progress.current} of ${progress.total}`
                   : "Converting…"
                 : result
                   ? "Convert again"
@@ -229,7 +249,13 @@ export function PdfToWord() {
 
       <div className="pdf-status" aria-live="polite" aria-atomic="true">
         {status === "preparing" && <p>Preparing and checking your PDF…</p>}
-        {status === "converting" && <p>Converting PDF text to a Word document…</p>}
+        {status === "converting" && (
+          <p>
+            {progress?.phase === "ocr" || progress?.phase === "ocr-download"
+              ? "Some pages have no selectable text, so text is being recognized on-device with OCR — nothing is uploaded."
+              : "Converting PDF text to a Word document…"}
+          </p>
+        )}
         {error && (
           <p className="converter-error">
             <strong>Couldn't convert this PDF.</strong> {error.message}

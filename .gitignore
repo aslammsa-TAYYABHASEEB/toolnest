@@ -53,3 +53,6 @@ Thumbs.db
 *.tmp
 *.temp
 ~$*
+
+# tesseract.js OCR assets (copied from node_modules at install time)
+public/tesseract/

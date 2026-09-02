@@ -1,5 +1,6 @@
 import { PdfProcessingError } from "@/lib/pdf/errors";
 import { loadPdfRendererDocument } from "@/lib/pdf/renderer";
+import { renderPageToCanvasForOcr } from "@/lib/pdf/ocr-render";
 import {
   MAX_PDF_TO_WORD_SOURCE_PAGES,
   MAX_PDF_TO_WORD_OUTPUT_SIZE,
@@ -134,9 +135,100 @@ function groupTextItemsIntoParagraphs(
   return paragraphs;
 }
 
+export type WordProgressPhase = "extracting" | "ocr" | "ocr-download";
+
+// Pages with fewer non-whitespace characters than this have no usable text
+// layer and are routed to on-device OCR.
+const OCR_MIN_PAGE_CHARS = 25;
+
+// Render scale for OCR: ~2.8 × 72dpi ≈ 200 DPI, the minimum for reliable
+// Tesseract accuracy while keeping canvas memory bounded.
+const OCR_RENDER_SCALE = 2.8;
+
+type OcrLoggerMessage = { status?: string; progress?: number };
+
+/**
+ * OCR a scanned page on-device: render to canvas at ~200 DPI, run Tesseract.js
+ * (dynamically imported so it never enters the main bundle), and return each
+ * recognized line as its own paragraph.
+ */
+async function ocrPageToParagraphs(
+  page: import("pdfjs-dist").PDFPageProxy,
+  pageNumber: number,
+  pageCount: number,
+  onProgress?: (
+    current: number,
+    total: number,
+    phase?: WordProgressPhase,
+    subProgress?: number,
+  ) => void,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  onProgress?.(pageNumber, pageCount, "ocr-download");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tesseract = (await import("tesseract.js")) as any;
+  assertNotAborted(signal);
+
+  const canvas = await renderPageToCanvasForOcr(page, OCR_RENDER_SCALE);
+  try {
+    const result = await tesseract.recognize(canvas, "eng", {
+      // Worker + wasm core are served from public/tesseract/ (copied by
+      // scripts/copy-pdf-assets.js). Language traineddata is fetched lazily
+      // from Tesseract's default CDN (langPath left unset).
+      workerPath: "/tesseract/worker.min.js",
+      corePath: "/tesseract/core",
+      logger: (message: OcrLoggerMessage) => {
+        if (typeof message.progress === "number") {
+          if (message.status === "loading tesseract core" || message.status === "loading language traineddata") {
+            onProgress?.(pageNumber, pageCount, "ocr-download", message.progress);
+          } else if (message.status === "recognizing text") {
+            onProgress?.(pageNumber, pageCount, "ocr", message.progress);
+          }
+        }
+      },
+    });
+    assertNotAborted(signal);
+    // Tesseract.js v7 nests lines under data.blocks[].paragraphs[].lines[];
+    // fall back to splitting data.text when blocks are unavailable.
+    const data = result?.data ?? {};
+    const paragraphs: string[] = [];
+    const pushLine = (text?: string) => {
+      const cleaned = (text || "").replace(/\s+/g, " ").trim();
+      if (cleaned) paragraphs.push(cleaned);
+    };
+    if (Array.isArray(data.blocks) && data.blocks.length) {
+      for (const block of data.blocks) {
+        for (const para of block?.paragraphs ?? []) {
+          for (const line of para?.lines ?? []) pushLine(line.text);
+        }
+      }
+    }
+    if (!paragraphs.length && typeof data.text === "string") {
+      for (const line of data.text.split(/\r?\n/)) pushLine(line);
+    }
+    return paragraphs;
+  } catch (caught) {
+    if (caught instanceof PdfProcessingError) throw caught;
+    throw new PdfProcessingError(
+      "ocr-failed",
+      caught instanceof Error
+        ? `On-device OCR failed: ${caught.message}`
+        : "On-device OCR could not read this page.",
+    );
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+}
+
 export async function convertPdfToWord(
   file: File,
-  onProgress?: (current: number, total: number) => void,
+  onProgress?: (
+    current: number,
+    total: number,
+    phase?: WordProgressPhase,
+    subProgress?: number,
+  ) => void,
   signal?: AbortSignal,
 ): Promise<{ blob: Blob; pageCount: number }> {
   validatePdfFile(file);
@@ -154,59 +246,58 @@ export async function convertPdfToWord(
     }
 
     // Dynamic import of pdfjs-dist to avoid DOMMatrix error during Next.js prerendering
-    const pdfjsModule = await import("pdfjs-dist");
-    const { OPS } = pdfjsModule;
+    await import("pdfjs-dist");
 
     const allChildren: Paragraph[] = [];
     let totalTextLength = 0;
 
     for (let i = 0; i < pageCount; i++) {
       assertNotAborted(signal);
-      onProgress?.(i + 1, pageCount);
+      onProgress?.(i + 1, pageCount, "extracting");
 
       const page = await document.getPage(i + 1);
       try {
         const textContent = await page.getTextContent();
-        // pdfjs-dist returns text items in raw content-stream order, which is
-        // not guaranteed to match reading order. Sort a copy by Y (descending:
-        // top of page first, since PDF Y grows upward), then by X (ascending:
-        // left to right within the same line, using the same 5-unit tolerance
-        // as groupTextItemsIntoParagraphs).
-        const items = [...textContent.items] as {
-          str: string;
-          transform: number[];
-        }[];
-        items.sort((a, b) => {
-          const yDiff = b.transform[5] - a.transform[5];
-          if (Math.abs(yDiff) > 5) return yDiff;
-          return a.transform[4] - b.transform[4];
-        });
-        const paragraphs = groupTextItemsIntoParagraphs(items);
-        for (const text of paragraphs) {
-          allChildren.push(new Paragraph({ children: [new TextRun(text)] }));
-          totalTextLength += text.length;
+        // Count usable non-whitespace characters on this page. A page with
+        // almost none has no usable text layer (scanned/image-based).
+        let pageChars = 0;
+        for (const item of textContent.items as { str: string }[]) {
+          pageChars += (item.str || "").replace(/\s/g, "").length;
         }
 
-        // --- Detect if page contains images (presence check only) ---
-        const operatorList = await page.getOperatorList();
-        let pageHasImages = false;
-        for (let j = 0; j < operatorList.fnArray.length; j++) {
-          if (operatorList.fnArray[j] === OPS.paintImageXObject) {
-            pageHasImages = true;
-            break;
+        if (pageChars < OCR_MIN_PAGE_CHARS) {
+          // Scanned/image-based page: run on-device OCR instead.
+          const ocrParagraphs = await ocrPageToParagraphs(
+            page,
+            i + 1,
+            pageCount,
+            onProgress,
+            signal,
+          );
+          for (const text of ocrParagraphs) {
+            allChildren.push(new Paragraph({ children: [new TextRun(text)] }));
+            totalTextLength += text.length;
           }
-        }
-
-        // --- Add note paragraph if page has images ---
-        if (pageHasImages) {
-          allChildren.push(new Paragraph({
-            children: [
-              new TextRun({
-                text: "[This page contains one or more images that are not included in this text extraction.]",
-                italics: true,
-              }),
-            ],
-          }));
+        } else {
+          // pdfjs-dist returns text items in raw content-stream order, which is
+          // not guaranteed to match reading order. Sort a copy by Y (descending:
+          // top of page first, since PDF Y grows upward), then by X (ascending:
+          // left to right within the same line, using the same 5-unit tolerance
+          // as groupTextItemsIntoParagraphs).
+          const items = [...textContent.items] as {
+            str: string;
+            transform: number[];
+          }[];
+          items.sort((a, b) => {
+            const yDiff = b.transform[5] - a.transform[5];
+            if (Math.abs(yDiff) > 5) return yDiff;
+            return a.transform[4] - b.transform[4];
+          });
+          const paragraphs = groupTextItemsIntoParagraphs(items);
+          for (const text of paragraphs) {
+            allChildren.push(new Paragraph({ children: [new TextRun(text)] }));
+            totalTextLength += text.length;
+          }
         }
 
         if (i < pageCount - 1) {

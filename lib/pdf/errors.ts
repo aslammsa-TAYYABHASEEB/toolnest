@@ -36,7 +36,8 @@ export type PdfProcessingErrorCode =
     | "word-conversion-failed"
     | "word-output-too-large"
     | "word-workload-too-large"
-    | "word-no-text-found";
+    | "word-no-text-found"
+    | "ocr-failed";
 
 export class PdfProcessingError extends Error {
   constructor(
