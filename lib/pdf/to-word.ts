@@ -20,40 +20,111 @@ function groupTextItemsIntoParagraphs(
   items: { str: string; transform: number[] }[],
 ): string[] {
   const DEFAULT_FONT_SIZE = 14.4;
-  const paragraphs: string[] = [];
-  let currentParagraph = "";
-  let lastY = -Infinity;
-  let paragraphFontSize = 0; // max font size seen in the current paragraph
-
   const fontSizeOf = (item: { transform: number[] }) =>
     Math.hypot(item.transform[2], item.transform[3]) || 0;
 
-  for (const item of items) {
-    // Skip empty/whitespace-only items: they must not create fake line
-    // transitions or reset lastY / paragraphFontSize.
-    if (!item.str || !item.str.trim()) continue;
+  // Only non-empty items participate; empty/whitespace items must not create
+  // fake transitions or corrupt gap tracking.
+  const nonEmpty = items.filter((item) => item.str && item.str.trim());
 
-    const fontSize = fontSizeOf(item);
-    // Reference line height is the max font size seen so far in this
-    // paragraph, so superscripts/inline size changes can't cause false breaks.
-    const referenceFontSize = Math.max(paragraphFontSize, fontSize) || DEFAULT_FONT_SIZE;
+  // --- Pass 1: detect the page's dominant line pitch ---
+  // Collect all line-to-line gaps (excluding same-line/justified-word gaps
+  // which are ~0) and take the MODE of gaps rounded to the nearest 0.5 unit.
+  // This is the document's normal single-line spacing, which real Word
+  // exports render at ~1.7x-2.0x the font size (far above the old fixed
+  // 1.6x threshold, which broke every wrapped line into its own paragraph).
+  const gapCounts = new Map<number, number>();
+  let prevY = -Infinity;
+  let prevFontSize = 0;
+  for (const item of nonEmpty) {
+    const fontSize = fontSizeOf(item) || DEFAULT_FONT_SIZE;
+    const y = item.transform[5];
+    if (prevY !== -Infinity) {
+      const gap = prevY - y;
+      if (gap > 0.4 * Math.max(fontSize, prevFontSize)) {
+        const key = Math.round(gap * 2) / 2;
+        gapCounts.set(key, (gapCounts.get(key) ?? 0) + 1);
+      }
+    }
+    prevY = y;
+    prevFontSize = fontSize;
+  }
+
+  let dominantPitch = 0;
+  if (gapCounts.size >= 3) {
+    let bestCount = 0;
+    for (const [pitch, count] of gapCounts) {
+      // On a tie, prefer the smaller pitch: under-splitting paragraphs is
+      // less harmful than merging distinct paragraphs.
+      if (count > bestCount || (count === bestCount && pitch < dominantPitch)) {
+        dominantPitch = pitch;
+        bestCount = count;
+      }
+    }
+  }
+
+  // --- Pass 2: classify each transition ---
+  const paragraphs: string[] = [];
+  let currentParagraph = "";
+  let lastY = -Infinity;
+  let lastFontSize = 0;
+  let atLineStart = true;
+  let lastListMarkerX: number | null = null;
+
+  // List markers: roman numerals, digits, or single letters followed by . or ),
+  // optionally parenthesized — e.g. "i.", "ii.", "1.", "(a)", "a)".
+  const LIST_MARKER_RE = /^(\(?[ivxlcdm]{1,6}\)?[.)]|\(?\d{1,3}\)?[.)]|\(?[a-z]\)?[.)])$/i;
+
+  for (const item of nonEmpty) {
+    const fontSize = fontSizeOf(item) || DEFAULT_FONT_SIZE;
     const y = item.transform[5];
     const gap = lastY === -Infinity ? Infinity : lastY - y;
+    const isNewLine = gap > 0.4 * Math.max(fontSize, lastFontSize);
 
-    if (currentParagraph && gap > 1.6 * referenceFontSize) {
-      // New paragraph: gap far exceeds one line height.
+    // Whether to start a new paragraph.
+    let isNewParagraph = false;
+    if (currentParagraph && isNewLine) {
+      if (dominantPitch > 0) {
+        // Adaptive mode: wrapped continuation lines sit at the document's
+        // dominant line pitch (with tolerance for float jitter); anything
+        // beyond that is a genuine paragraph boundary.
+        isNewParagraph = gap > dominantPitch * 1.15;
+      } else {
+        // Fallback (not enough distinct gaps to estimate a pitch): use the
+        // previous fixed-ratio heuristic as a safety net.
+        isNewParagraph = gap > 1.6 * fontSize;
+      }
+    }
+
+    if (isNewLine) {
+      const trimmed = item.str.trim();
+      if (LIST_MARKER_RE.test(trimmed)) {
+        // Additive forced-break signal: a new line starting with a list
+        // marker at (roughly) the X position of the previous list marker is
+        // the next list item, even when its Y-gap coincides with the
+        // dominant line pitch. Never suppresses a gap-based break.
+        if (
+          currentParagraph &&
+          lastListMarkerX !== null &&
+          Math.abs(item.transform[4] - lastListMarkerX) <= 5
+        ) {
+          isNewParagraph = true;
+        }
+        lastListMarkerX = item.transform[4];
+      }
+    }
+
+    if (isNewParagraph) {
       if (currentParagraph.trim()) {
         paragraphs.push(currentParagraph.trim());
       }
       currentParagraph = item.str;
-      paragraphFontSize = fontSize;
     } else {
-      // Same line (gap <= 0.4x) or wrapped continuation line (0.4x < gap
-      // <= 1.6x): merge into the current paragraph.
+      // Same line (gap <= 0.4x) or wrapped continuation line: merge.
       currentParagraph += (currentParagraph ? " " : "") + item.str;
-      paragraphFontSize = Math.max(paragraphFontSize, fontSize);
     }
     lastY = y;
+    lastFontSize = fontSize;
   }
 
   if (currentParagraph.trim()) {
