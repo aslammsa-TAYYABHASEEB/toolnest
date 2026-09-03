@@ -21,8 +21,13 @@ import {
   TableLayoutType,
   Packer,
 } from "docx";
-import { partitionPageIntoBlocks } from "@/lib/pdf/table-detection";
-import type { DetectedTable } from "@/lib/pdf/table-detection";
+import {
+  partitionPageIntoBlocks,
+  partitionOcrLinesIntoBlocks,
+  type DetectedTable,
+  type OcrLineBox,
+  type OcrPageBlock,
+} from "@/lib/pdf/table-detection";
 
 function assertNotAborted(signal?: AbortSignal) {
   if (signal?.aborted) {
@@ -178,8 +183,12 @@ type OcrLoggerMessage = { status?: string; progress?: number };
 
 type OcrLine = { text: string; x0: number; y0: number; x1: number; y1: number };
 
+type OcrWord = { text: string; x0: number; x1: number; confidence: number };
+
 type OcrRecognition = {
   lines: OcrLine[];
+  /** Word-level detail (bbox + confidence) used for table detection. */
+  lineWords: OcrWord[][];
   plainText: string;
   confidence: number;
 };
@@ -260,12 +269,25 @@ async function createOcrEngine(
       // is returned (no bbox/layout info).
       const { data } = await recWorker.recognize(image, {}, { blocks: true });
       const lines: OcrLine[] = [];
+      const lineWords: OcrWord[][] = [];
       if (Array.isArray(data?.blocks)) {
         for (const block of data.blocks) {
           for (const para of block?.paragraphs ?? []) {
             for (const line of para?.lines ?? []) {
               const text = (line?.text ?? "").replace(/\s+/g, " ").trim();
               const bbox = line?.bbox;
+              const words: OcrWord[] = ((line?.words ?? []) as {
+                text?: string;
+                bbox?: { x0?: number; x1?: number };
+                confidence?: number;
+              }[])
+                .map((w) => ({
+                  text: (w?.text ?? "").trim(),
+                  x0: w?.bbox?.x0 ?? 0,
+                  x1: w?.bbox?.x1 ?? 0,
+                  confidence: w?.confidence ?? 0,
+                }))
+                .filter((w) => w.text && w.x1 > w.x0);
               if (text && bbox) {
                 lines.push({
                   text,
@@ -274,6 +296,7 @@ async function createOcrEngine(
                   x1: bbox.x1,
                   y1: bbox.y1,
                 });
+                lineWords.push(words);
               } else if (text) {
                 lines.push({
                   text,
@@ -282,6 +305,7 @@ async function createOcrEngine(
                   x1: 0,
                   y1: lines.length,
                 });
+                lineWords.push(words);
               }
             }
           }
@@ -290,6 +314,7 @@ async function createOcrEngine(
       const plainText = typeof data?.text === "string" ? data.text : "";
       return {
         lines,
+        lineWords,
         plainText,
         confidence: typeof data?.confidence === "number" ? data.confidence : 0,
       };
@@ -407,7 +432,7 @@ function groupOcrLinesIntoParagraphs(lines: OcrLine[]): string[] {
  * is still too sparse), and group the recognized lines into layout-aware
  * paragraphs via groupOcrLinesIntoParagraphs.
  */
-async function ocrPageToParagraphs(
+async function ocrPageToBlocks(
   page: import("pdfjs-dist").PDFPageProxy,
   pageNumber: number,
   pageCount: number,
@@ -419,7 +444,7 @@ async function ocrPageToParagraphs(
     subProgress?: number,
   ) => void) | undefined,
   signal?: AbortSignal,
-): Promise<string[]> {
+): Promise<OcrPageBlock[]> {
   // Adaptive render scale: aim for ~3000px on the long edge so dense scans
   // keep enough detail, clamped so small pages aren't over-scaled and huge
   // pages stay within bounded canvas memory.
@@ -493,7 +518,18 @@ async function ocrPageToParagraphs(
       }
     }
 
-    return groupOcrLinesIntoParagraphs(chosen.recognition.lines);
+    // Table detection first (same shared column-boundary concept as the
+    // text-PDF path), then paragraph grouping for the remaining prose
+    // lines. Detection is deliberately conservative: anything ambiguous
+    // stays prose.
+    const recognition = chosen.recognition;
+    const ocrLines: OcrLineBox[] = recognition.lines.map((line, idx) => ({
+      text: line.text,
+      y0: line.y0,
+      y1: line.y1,
+      words: recognition.lineWords[idx] ?? [],
+    }));
+    return partitionOcrLinesIntoBlocks(ocrLines);
   } catch (caught) {
     if (caught instanceof PdfProcessingError) throw caught;
     throw new PdfProcessingError(
@@ -608,7 +644,7 @@ export async function convertPdfToWord(
           if (!ocrEngine) {
             ocrEngine = await createOcrEngine(onProgress, i + 1, pageCount);
           }
-          const ocrParagraphs = await ocrPageToParagraphs(
+          const ocrBlocks = await ocrPageToBlocks(
             page,
             i + 1,
             pageCount,
@@ -616,9 +652,25 @@ export async function convertPdfToWord(
             onProgress,
             signal,
           );
-          for (const text of ocrParagraphs) {
-            allChildren.push(new Paragraph({ children: [new TextRun(text)] }));
-            totalTextLength += text.length;
+          for (const block of ocrBlocks) {
+            if (block.kind === "table") {
+              allChildren.push(buildDocxTable(block.table));
+              totalTextLength += block.table.rows
+                .flat()
+                .join("").length;
+              continue;
+            }
+            const ocrProseLines = block.lines.map((l) => ({
+              text: l.text,
+              x0: 0,
+              y0: l.y0,
+              x1: 0,
+              y1: l.y1,
+            }));
+            for (const text of groupOcrLinesIntoParagraphs(ocrProseLines)) {
+              allChildren.push(new Paragraph({ children: [new TextRun(text)] }));
+              totalTextLength += text.length;
+            }
           }
         } else {
           // pdfjs-dist returns text items in raw content-stream order, which is

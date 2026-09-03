@@ -274,3 +274,227 @@ export function partitionPageIntoBlocks(items: PdfTextItem[]): PageBlock[] {
   return blocks;
 }
 
+/* ------------------------------------------------------------------------- *
+ * OCR-side table detection
+ *
+ * Same column-boundary concept as the text-PDF path, but fed from
+ * Tesseract's word-level bboxes (data.blocks[].paragraphs[].lines[].words).
+ * OCR coordinates are much noisier than pdfjs's, and cell text is often
+ * garbled or missing entirely (checkbox marks usually are not recognized as
+ * characters at all), so this variant:
+ *   - tolerates sparse rows (a line with a single segment becomes a row with
+ *     empty cells at the unclaimed column positions),
+ *   - rejects any segment that spans across an adjacent column boundary
+ *     (the classic OCR-garbage shape: one "word" glued across the grid),
+ *   - requires a minimum average word confidence inside the run,
+ * and is biased to fall back to flat paragraph text whenever anything looks
+ * ambiguous. Empirically (see the synthetic ruled rating form) Tesseract's
+ * default page segmentation garbles ruled-grid cells badly, so most real
+ * forms will NOT pass these gates — that is the intended, conservative
+ * behaviour: no table beats a broken table.
+ * ------------------------------------------------------------------------- */
+
+export interface OcrWordBox {
+  text: string;
+  x0: number;
+  x1: number;
+  confidence: number;
+}
+
+export interface OcrLineBox {
+  text: string;
+  y0: number;
+  y1: number;
+  words: OcrWordBox[];
+}
+
+export type OcrPageBlock =
+  | { kind: "table"; table: DetectedTable }
+  | { kind: "prose"; lines: OcrLineBox[] };
+
+// OCR tuning (pixel coordinates at the OCR render scale).
+const OCR_GAP_HEIGHT_RATIO = 2.2;   // column gap >= 2.2x line height
+const OCR_GAP_FLOOR_PX = 25;        // ...and at least this many px
+const OCR_SNAP_TOLERANCE = 1.5;     // boundary snap tolerance ~1.5x line height
+const OCR_MIN_WORD_CONFIDENCE = 50; // avg word confidence required in a run
+const OCR_MAX_SPARSE_RATIO = 0.4;   // <=40% of a run's rows may be sparse
+
+interface OcrSegmentedLine {
+  y0: number;
+  y1: number;
+  height: number;
+  segments: { x0: number; x1: number; text: string; confidence: number }[];
+}
+
+function segmentOcrLine(line: OcrLineBox): OcrSegmentedLine {
+  const words = [...line.words].sort((a, b) => a.x0 - b.x0);
+  const height = Math.max(1, line.y1 - line.y0);
+  const threshold = Math.max(OCR_GAP_FLOOR_PX, OCR_GAP_HEIGHT_RATIO * height);
+  const segments: OcrSegmentedLine["segments"] = [];
+  let seg: OcrSegmentedLine["segments"][number] | null = null;
+  for (const word of words) {
+    const text = word.text.trim();
+    if (!text) continue;
+    if (seg && word.x0 - seg.x1 < threshold) {
+      seg.text += ` ${text}`;
+      seg.x1 = word.x1;
+      seg.confidence = Math.min(seg.confidence, word.confidence);
+    } else {
+      seg = { x0: word.x0, x1: word.x1, text, confidence: word.confidence };
+      segments.push(seg);
+    }
+  }
+  return { y0: line.y0, y1: line.y1, height, segments };
+}
+
+/**
+ * Snap OCR segments to the shared boundaries, additionally rejecting any
+ * segment whose right edge crosses into the next column — OCR frequently
+ * glues the whole grid into one giant "word" and this is the cheapest
+ * reliable way to reject such garbage rows.
+ */
+function snapOcrToBoundaries(
+  line: OcrSegmentedLine,
+  boundaries: number[],
+  tolerance: number,
+): string[] | null {
+  const cells = boundaries.map(() => "");
+  const claimed = new Set<number>();
+  for (const segment of line.segments) {
+    let best = -1;
+    let bestDist = Infinity;
+    for (let c = 0; c < boundaries.length; c++) {
+      const dist = Math.abs(segment.x0 - boundaries[c]);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = c;
+      }
+    }
+    if (best === -1 || bestDist > tolerance || claimed.has(best)) return null;
+    const nextEdge =
+      best + 1 < boundaries.length
+        ? boundaries[best + 1] - 0.5 * tolerance
+        : Infinity;
+    if (segment.x1 > nextEdge) return null; // spans into the next column
+    claimed.add(best);
+    cells[best] = segment.text;
+  }
+  return cells;
+}
+
+function buildOcrTableFromRun(run: OcrSegmentedLine[]): DetectedTable | null {
+  // Row-like lines carry >= 2 segments; a run needs at least MIN_TABLE_ROWS
+  // of them. Sparse (single-segment) lines inside the run are tolerated up
+  // to OCR_MAX_SPARSE_RATIO of the run — they become rows with empty cells.
+  const rowLike = run.filter((l) => l.segments.length >= 2);
+  if (rowLike.length < MIN_TABLE_ROWS) return null;
+  if ((run.length - rowLike.length) / run.length > OCR_MAX_SPARSE_RATIO) {
+    return null;
+  }
+
+  // Shared boundary model from the densest row-like line.
+  let reference = rowLike[0];
+  for (const entry of rowLike) {
+    if (entry.segments.length > reference.segments.length) {
+      reference = entry;
+    }
+  }
+  const columnCount = reference.segments.length;
+  if (columnCount < MIN_TABLE_COLUMNS) return null;
+  const columnXs = reference.segments.map((s) => s.x0);
+  const tolerance = Math.max(15, OCR_SNAP_TOLERANCE * reference.height);
+
+  const rows: string[][] = [];
+  let totalConf = 0;
+  let confSegments = 0;
+  for (const entry of run) {
+    const cells = snapOcrToBoundaries(entry, columnXs, tolerance);
+    if (!cells) return null; // anything misaligned → not a table
+    rows.push(cells);
+    for (const segment of entry.segments) {
+      totalConf += segment.confidence;
+      confSegments += 1;
+    }
+  }
+
+  // OCR quality gate: garbled grid regions read at low confidence.
+  if (confSegments === 0 || totalConf / confSegments < OCR_MIN_WORD_CONFIDENCE) {
+    return null;
+  }
+
+  if (columnCount === 2 && isHighLengthVariance(rows)) return null;
+
+  return {
+    columnCount,
+    columnXs,
+    tableRight: Math.max(...run.flatMap((e) => e.segments.map((s) => s.x1))),
+    rows,
+  };
+}
+
+/**
+ * Partition OCR'd lines (top-to-bottom) into table and prose blocks.
+ * Extremely conservative: anything that fails a gate falls back to prose.
+ */
+export function partitionOcrLinesIntoBlocks(
+  lines: OcrLineBox[],
+): OcrPageBlock[] {
+  const sorted = [...lines].sort((a, b) => a.y0 - b.y0);
+  // Keep (original, segmented) pairs so filtered-out empty lines can't
+  // desynchronize the two arrays.
+  const segmented = sorted
+    .map((original) => ({ original, seg: segmentOcrLine(original) }))
+    .filter((entry) => entry.seg.segments.length > 0);
+
+  const blocks: OcrPageBlock[] = [];
+  let prose: OcrLineBox[] = [];
+  const flushProse = () => {
+    if (prose.length) {
+      blocks.push({ kind: "prose", lines: prose });
+      prose = [];
+    }
+  };
+
+  // A run = maximal consecutive lines that are row-like or sparse. Two
+  // consecutive sparse lines terminate the run: isolated stray words must
+  // never glue a table together across a prose gap.
+  let run: OcrSegmentedLine[] = [];
+  let runOriginal: OcrLineBox[] = [];
+  let sparseStreak = 0;
+
+  const closeRun = () => {
+    const table = buildOcrTableFromRun(run);
+    if (table) {
+      flushProse();
+      blocks.push({ kind: "table", table });
+    } else {
+      prose.push(...runOriginal);
+    }
+    run = [];
+    runOriginal = [];
+    sparseStreak = 0;
+  };
+
+  for (let i = 0; i < segmented.length; i++) {
+    const line = segmented[i].seg;
+    const original = segmented[i].original;
+    if (line.segments.length >= 2) {
+      if (sparseStreak >= 2) closeRun();
+      sparseStreak = 0;
+      run.push(line);
+      runOriginal.push(original);
+    } else if (run.length > 0) {
+      // Sparse line tentatively joining an open run.
+      run.push(line);
+      runOriginal.push(original);
+      sparseStreak += 1;
+    } else {
+      prose.push(original);
+    }
+  }
+  closeRun();
+  flushProse();
+
+  return blocks;
+}
+
