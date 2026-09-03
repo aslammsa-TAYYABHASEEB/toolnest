@@ -42,7 +42,7 @@ export function PdfToWord() {
   const [progress, setProgress] = useState<{
     current: number;
     total: number;
-    phase: "extracting" | "ocr" | "ocr-download";
+    phase: "extracting" | "ocr" | "ocr-download" | "ocr-orient";
     subProgress: number | null;
   } | null>(null);
   const download = usePdfDownload();
@@ -192,7 +192,9 @@ export function PdfToWord() {
                       ? progress.subProgress !== null
                         ? `Running on-device OCR… page ${progress.current} of ${progress.total} (${Math.round(progress.subProgress * 100)}%)`
                         : `Running on-device OCR… page ${progress.current} of ${progress.total}`
-                      : `Converting… page ${progress.current} of ${progress.total}`
+                      : progress.phase === "ocr-orient"
+                        ? `Detecting page orientation… page ${progress.current} of ${progress.total}`
+                        : `Converting… page ${progress.current} of ${progress.total}`
                   : "Converting…"
                 : result
                   ? "Convert again"
@@ -251,7 +253,9 @@ export function PdfToWord() {
         {status === "preparing" && <p>Preparing and checking your PDF…</p>}
         {status === "converting" && (
           <p>
-            {progress?.phase === "ocr" || progress?.phase === "ocr-download"
+            {progress?.phase === "ocr" ||
+              progress?.phase === "ocr-download" ||
+              progress?.phase === "ocr-orient"
               ? "Some pages have no selectable text, so text is being recognized on-device with OCR — nothing is uploaded."
               : "Converting PDF text to a Word document…"}
           </p>

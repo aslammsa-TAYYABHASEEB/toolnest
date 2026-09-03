@@ -43,3 +43,35 @@ export async function renderPageToCanvasForOcr(
     );
   }
 }
+
+/**
+ * Return a canvas rotated clockwise by 0/90/180/270 degrees.
+ * When degrees is 0, the same canvas is returned unchanged; otherwise a new
+ * canvas is created (the caller is responsible for releasing both).
+ */
+export function rotateCanvas(
+  source: HTMLCanvasElement,
+  degrees: 0 | 90 | 180 | 270,
+): HTMLCanvasElement {
+  if (degrees === 0) return source;
+  const rotated = document.createElement("canvas");
+  const swap = degrees === 90 || degrees === 270;
+  rotated.width = swap ? source.height : source.width;
+  rotated.height = swap ? source.width : source.height;
+  const context = rotated.getContext("2d", { alpha: false });
+  if (!context) {
+    throw new PdfProcessingError(
+      "renderer-unavailable",
+      "This browser could not create the canvas needed for OCR.",
+    );
+  }
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, rotated.width, rotated.height);
+  context.save();
+  context.translate(rotated.width / 2, rotated.height / 2);
+  context.rotate((degrees * Math.PI) / 180);
+  context.drawImage(source, -source.width / 2, -source.height / 2);
+  context.restore();
+  return rotated;
+}
+

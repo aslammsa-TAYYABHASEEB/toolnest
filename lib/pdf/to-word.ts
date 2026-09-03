@@ -1,6 +1,9 @@
 import { PdfProcessingError } from "@/lib/pdf/errors";
 import { loadPdfRendererDocument } from "@/lib/pdf/renderer";
-import { renderPageToCanvasForOcr } from "@/lib/pdf/ocr-render";
+import {
+  renderPageToCanvasForOcr,
+  rotateCanvas,
+} from "@/lib/pdf/ocr-render";
 import {
   MAX_PDF_TO_WORD_SOURCE_PAGES,
   MAX_PDF_TO_WORD_OUTPUT_SIZE,
@@ -135,78 +138,349 @@ function groupTextItemsIntoParagraphs(
   return paragraphs;
 }
 
-export type WordProgressPhase = "extracting" | "ocr" | "ocr-download";
+export type WordProgressPhase =
+  | "extracting"
+  | "ocr"
+  | "ocr-download"
+  | "ocr-orient";
 
 // Pages with fewer non-whitespace characters than this have no usable text
 // layer and are routed to on-device OCR.
 const OCR_MIN_PAGE_CHARS = 25;
 
-// Render scale for OCR: ~2.8 × 72dpi ≈ 200 DPI, the minimum for reliable
-// Tesseract accuracy while keeping canvas memory bounded.
-const OCR_RENDER_SCALE = 2.8;
+// Render scale bounds for OCR: the canvas is sized so a scan's detail is
+// preserved (large scanned pages render up to ~4.2x ≈ 300 DPI) while keeping
+// canvas memory bounded on smaller pages.
+const OCR_MIN_RENDER_SCALE = 2.8;
+const OCR_MAX_RENDER_SCALE = 4.2;
+const OCR_TARGET_LONG_EDGE_PX = 3000;
+
+// Minimum OSD orientation_confidence before we trust a non-zero angle.
+const OCR_ROTATION_MIN_CONFIDENCE = 5;
+// A recognize() pass is considered "poor" (likely still rotated/garbled) when
+// it yields fewer than this many 3+ letter words on a full scanned page.
+const OCR_MIN_GOOD_WORDS = 12;
 
 type OcrLoggerMessage = { status?: string; progress?: number };
 
+type OcrLine = { text: string; x0: number; y0: number; x1: number; y1: number };
+
+type OcrRecognition = {
+  lines: OcrLine[];
+  plainText: string;
+  confidence: number;
+};
+
+type OcrEngine = {
+  detect: (image: HTMLCanvasElement) => Promise<{
+    degrees: number;
+    confidence: number;
+  }>;
+  recognize: (image: HTMLCanvasElement) => Promise<OcrRecognition>;
+  terminate: () => Promise<void>;
+};
+
+function ocrAlphaWords(recognition: OcrRecognition): number {
+  return (recognition.plainText.match(/[A-Za-z]{3,}/g) ?? []).length;
+}
+
 /**
- * OCR a scanned page on-device: render to canvas at ~200 DPI, run Tesseract.js
- * (dynamically imported so it never enters the main bundle), and return each
- * recognized line as its own paragraph.
+ * Create a shared Tesseract worker for the whole conversion (one spawn per
+ * document instead of per page). Worker + wasm core are served from
+ * public/tesseract/ (copied by scripts/copy-pdf-assets.js); language data is
+ * fetched lazily from Tesseract's default CDN.
+ */
+async function createOcrEngine(
+  onProgress: ((
+    current: number,
+    total: number,
+    phase?: WordProgressPhase,
+    subProgress?: number,
+  ) => void) | undefined,
+  pageNumber: number,
+  pageCount: number,
+): Promise<OcrEngine> {
+  onProgress?.(pageNumber, pageCount, "ocr-download");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tesseract = (await import("tesseract.js")) as any;
+  const logger = (message: OcrLoggerMessage) => {
+    if (typeof message.progress !== "number") return;
+    if (
+      message.status === "loading tesseract core" ||
+      message.status === "loading language traineddata" ||
+      message.status === "loading osd traineddata"
+    ) {
+      onProgress?.(pageNumber, pageCount, "ocr-download", message.progress);
+    } else if (message.status === "recognizing text") {
+      onProgress?.(pageNumber, pageCount, "ocr", message.progress);
+    }
+  };
+  // Recognition runs on the fast LSTM engine (best quality + block geometry).
+  // Orientation detection relies on Tesseract's OSD, which is only available on
+  // the legacy (non-LSTM) engine, so it gets its own dedicated worker that
+  // loads the OSD traineddata once per conversion.
+  const workerOptions = {
+    workerPath: "/tesseract/worker.min.js",
+    corePath: "/tesseract/core",
+    logger,
+  };
+  const recWorker = await tesseract.createWorker("eng", 1, workerOptions);
+  const osdWorker = await tesseract.createWorker("osd", 0, {
+    ...workerOptions,
+    legacyCore: true,
+  });
+  return {
+    async detect(image) {
+      const result = await osdWorker.detect(image);
+      const data = result?.data ?? {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const record = data as any;
+      return {
+        degrees: (record.orientation_degrees ?? 0) as number,
+        confidence: (record.orientation_confidence ?? 0) as number,
+      };
+    },
+    async recognize(image): Promise<OcrRecognition> {
+      // v7's one-shot recognize() API does not accept output options; on a
+      // worker the third argument selects result fields. Without
+      // { blocks: true } data.blocks is always null and only flat data.text
+      // is returned (no bbox/layout info).
+      const { data } = await recWorker.recognize(image, {}, { blocks: true });
+      const lines: OcrLine[] = [];
+      if (Array.isArray(data?.blocks)) {
+        for (const block of data.blocks) {
+          for (const para of block?.paragraphs ?? []) {
+            for (const line of para?.lines ?? []) {
+              const text = (line?.text ?? "").replace(/\s+/g, " ").trim();
+              const bbox = line?.bbox;
+              if (text && bbox) {
+                lines.push({
+                  text,
+                  x0: bbox.x0,
+                  y0: bbox.y0,
+                  x1: bbox.x1,
+                  y1: bbox.y1,
+                });
+              } else if (text) {
+                lines.push({
+                  text,
+                  x0: 0,
+                  y0: lines.length,
+                  x1: 0,
+                  y1: lines.length,
+                });
+              }
+            }
+          }
+        }
+      }
+      const plainText = typeof data?.text === "string" ? data.text : "";
+      return {
+        lines,
+        plainText,
+        confidence: typeof data?.confidence === "number" ? data.confidence : 0,
+      };
+    },
+    async terminate() {
+      await Promise.all([
+        recWorker.terminate(),
+        osdWorker.terminate(),
+      ]);
+    },
+  };
+}
+
+/**
+ * Group OCR'd lines (each with a bounding box) into paragraphs using the same
+ * adaptive line-pitch + list-marker strategy as the text-extraction path.
+ *
+ * OCR coordinates are screen-space (y grows downward), so rows are read
+ * top-to-bottom by ascending y0. Several recognized lines can share one
+ * visual row (columns/table cells); their segments are joined so column
+ * structure stays readable instead of collapsing into character soup.
+ */
+function groupOcrLinesIntoParagraphs(lines: OcrLine[]): string[] {
+  const usable = lines.filter((line) => line.text.trim());
+  if (!usable.length) return [];
+
+  // Sort top-to-bottom, then left-to-right (4px row jitter tolerance).
+  usable.sort((a, b) => (Math.abs(a.y0 - b.y0) > 4 ? a.y0 - b.y0 : a.x0 - b.x0));
+
+  // Median line height for jitter-tolerant row clustering.
+  const heights = usable
+    .map((line) => line.y1 - line.y0)
+    .filter((h) => h > 0)
+    .sort((a, b) => a - b);
+  const lineHeight = heights.length
+    ? heights[Math.floor(heights.length / 2)]
+    : 12;
+
+  // Cluster lines into visual rows.
+  const rows: { y0: number; x0: number; segments: string[] }[] = [];
+  for (const line of usable) {
+    const last = rows[rows.length - 1];
+    if (last && Math.abs(line.y0 - last.y0) <= 0.6 * lineHeight) {
+      last.segments.push(line.text);
+    } else {
+      rows.push({ y0: line.y0, x0: line.x0, segments: [line.text] });
+    }
+  }
+
+  // Dominant row pitch (mode of consecutive row gaps, rounded to 0.5px).
+  const gapCounts = new Map<number, number>();
+  for (let i = 1; i < rows.length; i++) {
+    const gap = rows[i].y0 - rows[i - 1].y0;
+    if (gap > 0.6 * lineHeight) {
+      const key = Math.round(gap * 2) / 2;
+      gapCounts.set(key, (gapCounts.get(key) ?? 0) + 1);
+    }
+  }
+  let dominantPitch = 0;
+  if (gapCounts.size >= 3) {
+    let bestCount = 0;
+    for (const [pitch, count] of gapCounts) {
+      if (count > bestCount || (count === bestCount && pitch < dominantPitch)) {
+        dominantPitch = pitch;
+        bestCount = count;
+      }
+    }
+  }
+
+  // Same list-marker rule as the text path.
+  const LIST_MARKER_RE =
+    /^(\(?[ivxlcdm]{1,6}\)?[.)]|\(?\d{1,3}\)?[.)]|\(?[a-z]\)?[.)])$/i;
+
+  const paragraphs: string[] = [];
+  let currentRow = -1;
+  let lastListMarkerX: number | null = null;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const text = row.segments.join(" ").replace(/\s+/g, " ").trim();
+
+    const gap = currentRow === -1 ? Infinity : row.y0 - rows[currentRow].y0;
+    let isNewParagraph = false;
+    if (currentRow !== -1) {
+      if (dominantPitch > 0) {
+        isNewParagraph = gap > dominantPitch * 1.3;
+      } else {
+        isNewParagraph = gap > 1.6 * lineHeight;
+      }
+    }
+
+    const firstToken = text.split(/\s+/)[0]?.replace(/^[("']+/, "") ?? "";
+    if (LIST_MARKER_RE.test(firstToken)) {
+      if (lastListMarkerX !== null && Math.abs(row.x0 - lastListMarkerX) <= 8) {
+        isNewParagraph = true;
+      }
+      lastListMarkerX = row.x0;
+    }
+
+    if (currentRow === -1 || isNewParagraph) {
+      if (text) paragraphs.push(text);
+    } else if (text) {
+      paragraphs[paragraphs.length - 1] += ` ${text}`;
+    }
+    currentRow = i;
+  }
+
+  return paragraphs.map((p) => p.trim()).filter(Boolean);
+}
+
+  /**
+ * OCR a single scanned page: render to canvas at a bounded resolution, detect
+ * the page orientation with OSD, auto-rotate the canvas (trying the detected
+ * direction first and the opposite/0 candidates only when the recognized text
+ * is still too sparse), and group the recognized lines into layout-aware
+ * paragraphs via groupOcrLinesIntoParagraphs.
  */
 async function ocrPageToParagraphs(
   page: import("pdfjs-dist").PDFPageProxy,
   pageNumber: number,
   pageCount: number,
-  onProgress?: (
+  engine: OcrEngine,
+  onProgress: ((
     current: number,
     total: number,
     phase?: WordProgressPhase,
     subProgress?: number,
-  ) => void,
+  ) => void) | undefined,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  onProgress?.(pageNumber, pageCount, "ocr-download");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tesseract = (await import("tesseract.js")) as any;
-  assertNotAborted(signal);
+  // Adaptive render scale: aim for ~3000px on the long edge so dense scans
+  // keep enough detail, clamped so small pages aren't over-scaled and huge
+  // pages stay within bounded canvas memory.
+  const baseViewport = page.getViewport({ scale: 1 });
+  const longEdge = Math.max(baseViewport.width, baseViewport.height);
+  const scale = Math.min(
+    OCR_MAX_RENDER_SCALE,
+    Math.max(OCR_MIN_RENDER_SCALE, OCR_TARGET_LONG_EDGE_PX / longEdge),
+  );
 
-  const canvas = await renderPageToCanvasForOcr(page, OCR_RENDER_SCALE);
+  const canvas = await renderPageToCanvasForOcr(page, scale);
+  const rotatedCanvases: HTMLCanvasElement[] = [];
+
+  type OcrCandidate = {
+    deg: number;
+    recognition: OcrRecognition;
+    words: number;
+  };
+  let chosen: OcrCandidate | null = null;
+
   try {
-    const result = await tesseract.recognize(canvas, "eng", {
-      // Worker + wasm core are served from public/tesseract/ (copied by
-      // scripts/copy-pdf-assets.js). Language traineddata is fetched lazily
-      // from Tesseract's default CDN (langPath left unset).
-      workerPath: "/tesseract/worker.min.js",
-      corePath: "/tesseract/core",
-      logger: (message: OcrLoggerMessage) => {
-        if (typeof message.progress === "number") {
-          if (message.status === "loading tesseract core" || message.status === "loading language traineddata") {
-            onProgress?.(pageNumber, pageCount, "ocr-download", message.progress);
-          } else if (message.status === "recognizing text") {
-            onProgress?.(pageNumber, pageCount, "ocr", message.progress);
-          }
-        }
-      },
-    });
+    // Detect the page orientation with Tesseract's OSD. We always heed a
+    // non-zero angle (OSD is reliable for these scans); the confidence only
+    // controls whether we can trust the detected direction immediately or need
+    // to compare it against the opposite/0 candidates.
+    onProgress?.(pageNumber, pageCount, "ocr-orient");
+    const detection = await engine.detect(canvas);
     assertNotAborted(signal);
-    // Tesseract.js v7 nests lines under data.blocks[].paragraphs[].lines[];
-    // fall back to splitting data.text when blocks are unavailable.
-    const data = result?.data ?? {};
-    const paragraphs: string[] = [];
-    const pushLine = (text?: string) => {
-      const cleaned = (text || "").replace(/\s+/g, " ").trim();
-      if (cleaned) paragraphs.push(cleaned);
+
+    const quadrant = Math.round(detection.degrees / 90) % 4;
+    const detected = ((((quadrant % 4) + 4) % 4) * 90) as 0 | 90 | 180 | 270;
+    const confident = detection.confidence >= OCR_ROTATION_MIN_CONFIDENCE;
+    const opposite = ((detected + 180) % 360) as 0 | 90 | 180 | 270;
+
+    // Recognize a rotation (tracking canvases for cleanup) and return the
+    // resulting word count so candidates can be compared.
+    const evaluate = async (deg: number): Promise<OcrCandidate> => {
+      const image =
+        deg === 0 ? canvas : rotateCanvas(canvas, deg as 0 | 90 | 180 | 270);
+      if (deg !== 0) rotatedCanvases.push(image);
+      const recognition = await engine.recognize(image);
+      assertNotAborted(signal);
+      return { deg, recognition, words: ocrAlphaWords(recognition) };
     };
-    if (Array.isArray(data.blocks) && data.blocks.length) {
-      for (const block of data.blocks) {
-        for (const para of block?.paragraphs ?? []) {
-          for (const line of para?.lines ?? []) pushLine(line.text);
+    const keepBetter = (best: OcrCandidate | null, cand: OcrCandidate) =>
+      !best || cand.words > best.words ? cand : best;
+
+    if (detected === 0) {
+      // Upright page: no rotation is the only sensible choice. If that reads
+      // very poorly, compare the other three orientations and keep the best.
+      chosen = await evaluate(0);
+      if (chosen.words < OCR_MIN_GOOD_WORDS) {
+        for (const deg of [180, 90, 270]) {
+          chosen = keepBetter(chosen, await evaluate(deg));
+        }
+      }
+    } else {
+      chosen = await evaluate(detected);
+      // Trust the detected direction only when OSD was confident AND the text
+      // reads well; otherwise compare against the opposite and 0° and keep the
+      // best, which also catches a wrong 90/270 call on an otherwise upright
+      // page (e.g. page 5, whose OSD confidence is below the trust threshold).
+      if (!(confident && chosen.words >= OCR_MIN_GOOD_WORDS)) {
+        const fallbacks = [opposite, 0];
+        const tried = new Set<number>([detected]);
+        for (const deg of fallbacks) {
+          if (tried.has(deg)) continue;
+          tried.add(deg);
+          chosen = keepBetter(chosen, await evaluate(deg));
         }
       }
     }
-    if (!paragraphs.length && typeof data.text === "string") {
-      for (const line of data.text.split(/\r?\n/)) pushLine(line);
-    }
-    return paragraphs;
+
+    return groupOcrLinesIntoParagraphs(chosen.recognition.lines);
   } catch (caught) {
     if (caught instanceof PdfProcessingError) throw caught;
     throw new PdfProcessingError(
@@ -216,6 +490,11 @@ async function ocrPageToParagraphs(
         : "On-device OCR could not read this page.",
     );
   } finally {
+    // Release the rotated canvases (the base render is owned/released here too).
+    for (const rotated of rotatedCanvases) {
+      rotated.width = 0;
+      rotated.height = 0;
+    }
     canvas.width = 0;
     canvas.height = 0;
   }
@@ -234,6 +513,10 @@ export async function convertPdfToWord(
   validatePdfFile(file);
   validatePdfTotalSize([file]);
   assertNotAborted(signal);
+
+  // Lazy, document-scoped OCR worker: created on the first scanned page and
+  // reused (and terminated) across the whole conversion.
+  let ocrEngine: OcrEngine | null = null;
 
   const document = await loadPdfRendererDocument(file);
   try {
@@ -266,11 +549,16 @@ export async function convertPdfToWord(
         }
 
         if (pageChars < OCR_MIN_PAGE_CHARS) {
-          // Scanned/image-based page: run on-device OCR instead.
+          // Scanned/image-based page: run on-device OCR instead. The Tesseract
+          // worker is created once per document and shared across pages.
+          if (!ocrEngine) {
+            ocrEngine = await createOcrEngine(onProgress, i + 1, pageCount);
+          }
           const ocrParagraphs = await ocrPageToParagraphs(
             page,
             i + 1,
             pageCount,
+            ocrEngine,
             onProgress,
             signal,
           );
@@ -335,6 +623,13 @@ export async function convertPdfToWord(
       pageCount,
     };
   } finally {
+    if (ocrEngine) {
+      try {
+        await ocrEngine.terminate();
+      } catch {
+        // Best-effort cleanup; the worker is local to this conversion.
+      }
+    }
     await document.destroy();
   }
 }
