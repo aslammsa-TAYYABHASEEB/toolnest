@@ -43,8 +43,9 @@ const MIN_TABLE_COLUMNS = 2;       // minimum detected columns
 const MIN_CONSISTENCY = 0.8;       // rows sharing the dominant column count
 const GAP_FLOOR = 14;              // min whitespace gap that can split columns
 const GAP_FONT_RATIO = 2.4;        // ...also >= 2.4x the font size
-const SNAP_TOLERANCE_FONT = 0.9;   // boundary snap tolerance ~0.9x font size
+const SNAP_TOLERANCE_FONT = 1.5;   // boundary snap tolerance ~1.5x font size
 const SNAP_TOLERANCE_FLOOR = 7;
+const MAX_SNAP_FAILURE_RATIO = 0.2; // up to 20% of run rows may fail to snap
 
 /**
  * A visual line of text: items already ordered left-to-right.
@@ -174,10 +175,15 @@ function isHighLengthVariance(rows: string[][]): boolean {
 /**
  * Try to interpret a maximal run of consecutive row-like lines as a table.
  * Returns null when the run fails any detection gate.
+ *
+ * Returns the detected table plus any "stray" items — rows that could not
+ * snap onto the shared boundary model fall back to prose instead of killing
+ * the entire run. This prevents a structurally-divergent tail (e.g. a
+ * summary section after a table) from poisoning the rows before it.
  */
 function buildTableFromRun(
   run: { line: TextLine; segments: { x0: number; x1: number; text: string }[] }[],
-): DetectedTable | null {
+): { table: DetectedTable; strayItems: PdfTextItem[] } | null {
   if (run.length < MIN_TABLE_ROWS) return null;
 
   // Shared boundary model: the run's densest line defines the columns.
@@ -194,16 +200,27 @@ function buildTableFromRun(
   );
 
   const rows: string[][] = [];
-  let consistent = 0;
+  const strayItems: PdfTextItem[] = [];
+  let snapFailures = 0;
   for (const entry of run) {
     const cells = snapToBoundaries(entry.segments, columnXs, tolerance);
-    if (!cells) return null; // grid is not clean — not a table
+    if (!cells) {
+      // Row cannot snap — collect its items as stray prose and skip it.
+      snapFailures++;
+      strayItems.push(...entry.line.items);
+      continue;
+    }
     rows.push(cells);
-    if (entry.segments.length === columnCount) consistent++;
   }
 
-  // Stability + consistency gates.
-  if (consistent / run.length < MIN_CONSISTENCY) return null;
+  // Too many rows failed to snap — the run is not a coherent grid.
+  if (snapFailures / run.length > MAX_SNAP_FAILURE_RATIO) return null;
+
+  // Stability + consistency gates: most rows must snap successfully onto
+  // the shared grid. Rows with fewer segments than columnCount are still
+  // consistent (they just leave some cells empty) — what matters is that
+  // they snap, not that they have the maximum number of segments.
+  if (rows.length / run.length < MIN_CONSISTENCY) return null;
 
   // Two-column runs are the classic false-positive shape: a numbered list
   // with a short trailing annotation ("1. Director Recovery, WASA
@@ -214,13 +231,41 @@ function buildTableFromRun(
   if (columnCount === 2 && isHighLengthVariance(rows)) return null;
 
   return {
-    columnCount,
-    columnXs,
-    tableRight: Math.max(
-      ...run.flatMap((entry) => entry.segments.map((s) => s.x1)),
-    ),
-    rows,
+    table: {
+      columnCount,
+      columnXs,
+      tableRight: Math.max(
+        ...run.flatMap((entry) => entry.segments.map((s) => s.x1)),
+      ),
+      rows,
+    },
+    strayItems,
   };
+}
+
+/**
+ * Compute the mode (most frequent) segment count across a run. Used to
+ * detect structural breaks: when a new line's column count diverges from
+ * the run's dominant count by more than 1, the run is terminated so a
+ * structurally-divergent tail cannot poison the rows before it.
+ */
+function modeSegmentCount(
+  run: { segments: { x0: number; x1: number; text: string }[] }[],
+): number {
+  const counts = new Map<number, number>();
+  for (const entry of run) {
+    const k = entry.segments.length;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  let best = 0;
+  let bestCount = 0;
+  for (const [k, c] of counts) {
+    if (c > bestCount) {
+      bestCount = c;
+      best = k;
+    }
+  }
+  return best;
 }
 
 /**
@@ -246,10 +291,14 @@ export function partitionPageIntoBlocks(items: PdfTextItem[]): PageBlock[] {
   let run: { line: TextLine; segments: { x0: number; x1: number; text: string }[] }[] = [];
 
   const closeRun = () => {
-    const table = buildTableFromRun(run);
-    if (table) {
+    const result = buildTableFromRun(run);
+    if (result) {
       flushProse();
-      blocks.push({ kind: "table", table });
+      blocks.push({ kind: "table", table: result.table });
+      // Rows that failed to snap become prose in original order.
+      if (result.strayItems.length) {
+        proseItems.push(...result.strayItems);
+      }
     } else {
       // Not a table: every line falls back to prose in original order.
       for (const entry of run) proseItems.push(...entry.line.items);
@@ -260,6 +309,15 @@ export function partitionPageIntoBlocks(items: PdfTextItem[]): PageBlock[] {
   for (const line of lines) {
     const segments = segmentLine(line);
     if (segments.length >= MIN_TABLE_COLUMNS) {
+      // Structural-break check: if this line's column count diverges from
+      // the run's dominant count by more than 1, terminate the run before
+      // adding this line — a different layout is starting.
+      if (run.length > 0) {
+        const mode = modeSegmentCount(run);
+        if (Math.abs(segments.length - mode) > 1) {
+          closeRun();
+        }
+      }
       run.push({ line, segments });
     } else {
       closeRun();
