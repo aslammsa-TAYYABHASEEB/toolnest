@@ -35,6 +35,13 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .input-label { color: var(--color-text); font-size: var(--text-sm); font-weight: 700; }
 .input-control { width: 100%; height: 3rem; padding: 0 var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
 .input-control::placeholder { color: var(--color-text-subtle); }
+.input-control[type="date"]::-webkit-datetime-edit-day-field,
+.input-control[type="date"]::-webkit-datetime-edit-month-field,
+.input-control[type="date"]::-webkit-datetime-edit-year-field { color: var(--color-text); }
+.input-control[type="date"]::-webkit-datetime-edit-day-field:focus,
+.input-control[type="date"]::-webkit-datetime-edit-month-field:focus,
+.input-control[type="date"]::-webkit-datetime-edit-year-field:focus { background: var(--color-brand-100); color: var(--color-text); }
+.input-control[type="date"]::-webkit-datetime-edit-text { color: var(--color-text-muted); }
 .input-control:hover:not(:disabled) { border-color: var(--color-border-strong); }
 .input-control:disabled { cursor: not-allowed; opacity: .7; background: var(--color-surface-muted); }
 .input-control.is-invalid { border-color: var(--color-danger-500); }
