@@ -35,16 +35,37 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .input-label { color: var(--color-text); font-size: var(--text-sm); font-weight: 700; }
 .input-control { width: 100%; height: 3rem; padding: 0 var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
 .input-control::placeholder { color: var(--color-text-subtle); }
-.input-control[type="date"]::-webkit-datetime-edit-day-field,
-.input-control[type="date"]::-webkit-datetime-edit-month-field,
-.input-control[type="date"]::-webkit-datetime-edit-year-field { color: var(--color-text); }
-.input-control[type="date"]::-webkit-datetime-edit-day-field:focus,
-.input-control[type="date"]::-webkit-datetime-edit-month-field:focus,
-.input-control[type="date"]::-webkit-datetime-edit-year-field:focus { background: var(--color-brand-100); color: var(--color-text); }
-.input-control[type="date"]::-webkit-datetime-edit-text { color: var(--color-text-muted); }
 .input-control:hover:not(:disabled) { border-color: var(--color-border-strong); }
 .input-control:disabled { cursor: not-allowed; opacity: .7; background: var(--color-surface-muted); }
 .input-control.is-invalid { border-color: var(--color-danger-500); }
+
+/* Date input text overlay: the native input's own text rendering is hidden
+   and replaced by an overlay span that renders a consistent "dd-mm-yyyy"
+   placeholder / formatted value regardless of browser quirks. The native
+   calendar-picker indicator stays visible and clickable. */
+.date-input-wrap { position: relative; display: block; }
+.date-input-hidden-text {
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.date-input-hidden-text::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+}
+.date-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--space-4);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  color: var(--color-text-subtle);
+  font-size: var(--text-base);
+  line-height: 1;
+  white-space: nowrap;
+}
+.date-overlay.has-value { color: var(--color-text); }
 .input-hint { color: var(--color-text-muted); font-size: var(--text-xs); }
 .input-hint.is-error { color: var(--color-danger-500); }
 .search-input { height: 3rem; display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); }

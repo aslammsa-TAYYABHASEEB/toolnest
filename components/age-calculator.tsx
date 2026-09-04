@@ -2,8 +2,82 @@
 
 import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { calculateAge, type AgeResult } from "@/lib/calc/age";
+
+/**
+ * Format an internal "YYYY-MM-DD" value as "DD-MM-YYYY" for display.
+ */
+function formatDisplayDate(value: string): string {
+  if (!value) return "";
+  const [y, m, d] = value.split("-");
+  if (!y || !m || !d) return "";
+  return `${d}-${m}-${y}`;
+}
+
+const DATE_PLACEHOLDER = "dd-mm-yyyy";
+
+type DateInputProps = {
+  label: string;
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  max?: string;
+};
+
+/**
+ * Date input with a text overlay that reliably renders a "dd-mm-yyyy"
+ * placeholder and a formatted "DD-MM-YYYY" value, regardless of the browser's
+ * native date-input placeholder quirks. The native input type=date stays
+ * fully functional underneath (calendar icon, keyboard, mobile picker); only
+ * its own text rendering is hidden and replaced by our overlay span.
+ */
+function DateInput({
+  label,
+  id,
+  value,
+  onChange,
+  hint,
+  error,
+  required,
+  max,
+}: DateInputProps) {
+  const hasValue = Boolean(value);
+  const overlayText = hasValue ? formatDisplayDate(value) : DATE_PLACEHOLDER;
+  const descriptionId = (hint || error) ? `${id}-description` : undefined;
+
+  return (
+    <div className="input-field">
+      <label className="input-label" htmlFor={id}>{label}</label>
+      <div className="date-input-wrap">
+        <input
+          id={id}
+          type="date"
+          className={`input-control date-input-hidden-text${error ? " is-invalid" : ""}`}
+          aria-invalid={Boolean(error)}
+          aria-describedby={descriptionId}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required={required}
+          max={max}
+        />
+        <span
+          aria-hidden="true"
+          className={`date-overlay${hasValue ? " has-value" : ""}`}
+        >
+          {overlayText}
+        </span>
+      </div>
+      {(hint || error) && (
+        <span id={descriptionId} className={`input-hint${error ? " is-error" : ""}`}>
+          {error ?? hint}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function parseDate(value: string): Date | null {
   if (!value) return null;
@@ -80,21 +154,21 @@ export function AgeCalculator() {
   return (
     <Card className="p-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <Input
+        <DateInput
           label="Date of birth"
-          type="date"
+          id="birth-date"
           value={birthDateStr}
-          onChange={(e) => setBirthDateStr(e.target.value)}
+          onChange={setBirthDateStr}
           error={error ?? undefined}
           max={todayStr}
           required
         />
-        <Input
+        <DateInput
           label="Calculate age as of"
-          type="date"
-          hint={`Defaults to today (${todayStr}) if left empty. Future dates allowed.`}
+          id="as-of-date"
           value={asOfDateStr}
-          onChange={(e) => setAsOfDateStr(e.target.value)}
+          onChange={setAsOfDateStr}
+          hint={`Defaults to today (${todayStr}) if left empty. Future dates allowed.`}
         />
       </div>
 
