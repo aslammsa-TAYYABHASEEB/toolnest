@@ -4,16 +4,6 @@ import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { calculateAge, type AgeResult } from "@/lib/calc/age";
 
-/**
- * Format an internal "YYYY-MM-DD" value as "DD-MM-YYYY" for display.
- */
-function formatDisplayDate(value: string): string {
-  if (!value) return "";
-  const [y, m, d] = value.split("-");
-  if (!y || !m || !d) return "";
-  return `${d}-${m}-${y}`;
-}
-
 const DATE_PLACEHOLDER = "dd-mm-yyyy";
 
 type DateInputProps = {
@@ -44,8 +34,12 @@ function DateInput({
   required,
   max,
 }: DateInputProps) {
+  const [focused, setFocused] = useState(false);
   const hasValue = Boolean(value);
-  const overlayText = hasValue ? formatDisplayDate(value) : DATE_PLACEHOLDER;
+  // Overlay + hidden native text ONLY for the empty, unfocused placeholder
+  // state. Focused fields must show native rendering for typing feedback;
+  // filled fields render fine natively (locale format).
+  const useOverlay = !focused && !hasValue;
   const descriptionId = (hint || error) ? `${id}-description` : undefined;
 
   return (
@@ -55,20 +49,21 @@ function DateInput({
         <input
           id={id}
           type="date"
-          className={`input-control date-input-hidden-text${error ? " is-invalid" : ""}`}
+          className={`input-control${useOverlay ? " date-input-hidden-text" : ""}${error ? " is-invalid" : ""}`}
           aria-invalid={Boolean(error)}
           aria-describedby={descriptionId}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           required={required}
           max={max}
         />
-        <span
-          aria-hidden="true"
-          className={`date-overlay${hasValue ? " has-value" : ""}`}
-        >
-          {overlayText}
-        </span>
+        {useOverlay && (
+          <span aria-hidden="true" className="date-overlay">
+            {DATE_PLACEHOLDER}
+          </span>
+        )}
       </div>
       {(hint || error) && (
         <span id={descriptionId} className={`input-hint${error ? " is-error" : ""}`}>
@@ -153,7 +148,7 @@ export function AgeCalculator() {
 
   return (
     <Card className="p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-start">
         <DateInput
           label="Date of birth"
           id="birth-date"

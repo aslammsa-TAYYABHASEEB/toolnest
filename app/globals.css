@@ -44,6 +44,11 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
    placeholder / formatted value regardless of browser quirks. The native
    calendar-picker indicator stays visible and clickable. */
 .date-input-wrap { position: relative; display: block; }
+/* The native input is inline-block by default; inside this block wrapper it
+   must be display:block so the wrapper's height equals the input's height
+   (an inline-block line box adds descender space below the input, inflating
+   the wrapper and misaligning the two date-field rows). */
+.date-input-wrap .input-control { display: block; }
 .date-input-hidden-text {
   -webkit-text-fill-color: transparent;
   color: transparent;
