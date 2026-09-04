@@ -85,7 +85,7 @@ export const tools: Tool[] = [
   { name: "Case Converter", description: "Switch text between uppercase and lowercase styles.", category: "text-tools", icon: "Aa", available: true, href: "/tools/case-converter" },
   { name: "Remove Extra Spaces", description: "Clean repeated spaces and untidy line breaks.", category: "text-tools", icon: "¶", available: true, href: "/tools/remove-extra-spaces" },
   { name: "Percentage Calculator", description: "Solve common percentage questions quickly.", category: "calculators", icon: "%", popular: true, available: true, href: "/tools/percentage-calculator" },
-  { name: "Age Calculator", description: "Calculate age between two selected dates.", category: "calculators", icon: "A" },
+  { name: "Age Calculator", description: "Calculate exact age in years, months, and days from date of birth.", category: "calculators", icon: "A", popular: true, available: true, href: "/tools/age-calculator" },
   { name: "Unit Converter", description: "Convert common length, weight, and temperature units.", category: "calculators", icon: "⇄" },
 ];
 
