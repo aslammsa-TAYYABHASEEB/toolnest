@@ -92,10 +92,9 @@ export function AgeCalculator() {
         <Input
           label="Calculate age as of"
           type="date"
-          hint={`Defaults to today (${todayStr}) if left empty`}
+          hint={`Defaults to today (${todayStr}) if left empty. Future dates allowed.`}
           value={asOfDateStr}
           onChange={(e) => setAsOfDateStr(e.target.value)}
-          max={todayStr}
         />
       </div>
 
