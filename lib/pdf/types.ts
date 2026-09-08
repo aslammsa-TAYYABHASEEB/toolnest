@@ -14,6 +14,8 @@ export const MAX_PDF_ROTATE_SOURCE_PAGES = 500;
 export const MAX_PDF_ROTATE_THUMBNAILS = 40;
 export const MAX_PDF_ROTATE_THUMBNAIL_PIXELS = 6 * 1024 * 1024;
 export const MAX_PDF_ROTATE_OUTPUT_SIZE = 200 * 1024 * 1024;
+export const MAX_PDF_WATERMARK_SOURCE_PAGES = 1000;
+export const MAX_PDF_WATERMARK_OUTPUT_SIZE = 200 * 1024 * 1024;
 
 export type PdfMergeStatus =
   | "idle"
@@ -155,6 +157,34 @@ export type PdfRotationResult = {
   pageCount: number;
   rotatedPageCount: number;
   effectiveRotations: PdfQuarterRotation[];
+};
+
+export type PdfWatermarkPosition =
+  | "center"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
+
+export type PdfWatermarkAngle = 0 | 45 | -45 | 90;
+
+export type PdfWatermarkSource = PdfFileMetadata;
+
+export type PdfWatermarkOptions = {
+  text: string;
+  fontSize: number;
+  opacity: number;
+  angle: PdfWatermarkAngle;
+  position: PdfWatermarkPosition;
+  pages: number[];
+};
+
+export type PdfWatermarkResult = {
+  blob: Blob;
+  filename: string;
+  size: number;
+  pageCount: number;
+  watermarkedPageCount: number;
 };
 
 export type CompressionLevel = "light" | "balanced" | "strong";

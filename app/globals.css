@@ -508,6 +508,32 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .pdf-rotate-generate .ui-button { width: 100%; }
 .pdf-rotate-result { grid-template-columns: auto minmax(0, 1fr); }
 .pdf-rotate-result .pdf-result-actions { grid-column: 1 / -1; }
+.pdf-watermark-shell, .pdf-watermark-panel { min-width: 0; }
+.pdf-watermark-panel { padding: var(--space-4); }
+.pdf-watermark-controls { min-width: 0; display: grid; gap: var(--space-5); margin-top: var(--space-5); }
+.pdf-watermark-grid { min-width: 0; display: grid; gap: var(--space-4); }
+.pdf-watermark-field { min-width: 0; display: grid; gap: var(--space-2); }
+.pdf-watermark-field > label { display: flex; justify-content: space-between; gap: var(--space-3); color: var(--color-text); font-size: var(--text-sm); font-weight: 850; }
+.pdf-watermark-field output { color: var(--color-brand-700); }
+.pdf-watermark-field input:not([type="range"]), .pdf-watermark-field select { width: 100%; min-width: 0; min-height: 2.75rem; padding: .72rem .85rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); outline: 0; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); }
+.pdf-watermark-field input:focus, .pdf-watermark-field select:focus { border-color: var(--color-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 22%, transparent); }
+.pdf-watermark-field input[aria-invalid="true"] { border-color: var(--color-danger-500); }
+.pdf-watermark-field input[type="range"] { width: 100%; accent-color: var(--color-brand-500); }
+.pdf-watermark-field small { color: var(--color-text-muted); font-size: var(--text-xs); line-height: 1.5; }
+.pdf-watermark-field small.is-error { color: var(--color-danger-500); font-weight: 750; }
+.pdf-watermark-options { min-width: 0; margin: 0; padding: 0; border: 0; }
+.pdf-watermark-options legend { margin-bottom: var(--space-2); color: var(--color-text); font-size: var(--text-sm); font-weight: 850; }
+.pdf-watermark-options > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+.pdf-watermark-options label { min-height: 2.75rem; display: grid; place-items: center; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text-muted); cursor: pointer; font-size: var(--text-xs); font-weight: 800; text-align: center; }
+.pdf-watermark-options label.is-selected { border-color: var(--color-brand-500); background: var(--color-surface-brand); color: var(--color-brand-700); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand-500) 10%, transparent); }
+.pdf-watermark-options input { position: absolute; opacity: 0; pointer-events: none; }
+.pdf-watermark-options label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--color-focus) 46%, transparent); outline-offset: 3px; }
+.pdf-watermark-pages { grid-template-columns: 1fr; }
+.pdf-watermark-pages legend { grid-column: 1 / -1; }
+.pdf-watermark-actions { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-5); }
+.pdf-watermark-actions .ui-button { width: 100%; }
+.pdf-watermark-result { grid-template-columns: auto minmax(0, 1fr); }
+.pdf-watermark-result .ui-button { grid-column: 1 / -1; width: 100%; }
 .qr-generator-shell, .qr-workspace, .qr-form-card, .qr-preview-card { min-width: 0; }
 .qr-generator-shell { display: grid; gap: var(--space-4); }
 .qr-workspace { display: grid; gap: var(--space-4); align-items: start; }
@@ -697,6 +723,13 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
   .pdf-rotate-generate { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
   .pdf-rotate-generate .ui-button { width: auto; }
   .pdf-rotate-result { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .pdf-watermark-panel { padding: var(--space-5); }
+  .pdf-watermark-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pdf-watermark-pages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pdf-watermark-actions { flex-direction: row; }
+  .pdf-watermark-actions .ui-button { width: auto; }
+  .pdf-watermark-result { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .pdf-watermark-result .ui-button { grid-column: auto; width: auto; }
   .qr-form-card, .qr-preview-card { padding: var(--space-5); }
   .qr-type-selector > div { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .qr-vcard-grid, .qr-color-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

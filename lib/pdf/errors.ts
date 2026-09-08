@@ -37,7 +37,12 @@ export type PdfProcessingErrorCode =
     | "word-output-too-large"
     | "word-workload-too-large"
     | "word-no-text-found"
-    | "ocr-failed";
+    | "ocr-failed"
+    | "watermark-empty-text"
+    | "watermark-invalid-options"
+    | "watermark-unsupported-text"
+    | "watermark-failed"
+    | "watermark-output-too-large";
 
 export class PdfProcessingError extends Error {
   constructor(

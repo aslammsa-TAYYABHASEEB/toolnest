@@ -62,11 +62,14 @@ function splitTokens(value: string) {
   return tokens;
 }
 
-function assertWorkload(pageCount: number) {
-  if (pageCount > MAX_PDF_SPLIT_WORK_PAGES) {
+function assertWorkload(
+  pageCount: number,
+  maxPages = MAX_PDF_SPLIT_WORK_PAGES,
+) {
+  if (pageCount > maxPages) {
     throw new PdfProcessingError(
       "workload-too-large",
-      `This operation would copy ${pageCount} pages. Select no more than ${MAX_PDF_SPLIT_WORK_PAGES} pages at once to protect browser memory.`,
+      `Select no more than ${maxPages} pages at once to protect browser memory.`,
     );
   }
 }
@@ -111,13 +114,14 @@ export function formatPageSelection(pages: number[]) {
 export function parsePageSelection(
   value: string,
   pageCount: number,
+  maxPages = MAX_PDF_SPLIT_WORK_PAGES,
 ): PdfPageGroup {
   const selected = new Set<number>();
   for (const token of splitTokens(value)) {
     parseToken(token, pageCount).pages.forEach((page) => selected.add(page));
   }
   const pages = Array.from(selected).sort((a, b) => a - b);
-  assertWorkload(pages.length);
+  assertWorkload(pages.length, maxPages);
   const fullLabel = compactPageLabel(pages);
   const filenameLabel = fullLabel.length <= 80 ? fullLabel : "selected";
   return {
