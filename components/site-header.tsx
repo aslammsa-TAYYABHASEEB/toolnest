@@ -18,7 +18,7 @@ export function SiteHeader() {
           <span>Tool<span>Nest</span></span>
         </Link>
 
-        <div className="header-search"><SearchInput disabled /></div>
+        <div className="header-search"><SearchInput /></div>
 
         <nav className="desktop-nav" aria-label="Main navigation">
           {navItems.slice(0, 2).map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
@@ -38,7 +38,7 @@ export function SiteHeader() {
             <summary aria-label="Open navigation"><span /><span /><span /></summary>
             <div className="mobile-menu-panel">
               <div className="mobile-menu-heading"><strong>Menu</strong><span>Explore ToolNest</span></div>
-              <SearchInput disabled />
+              <SearchInput label="Search tools in mobile navigation" />
               <nav aria-label="Mobile navigation">
                 {navItems.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
                 <span className="mobile-nav-label">Categories</span>

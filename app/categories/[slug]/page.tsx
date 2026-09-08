@@ -31,13 +31,6 @@ export default async function CategoryPage({ params }: PageProps) {
   const categoryTools = getToolsByCategory(category.slug);
   const availableTools = categoryTools.filter((tool) => tool.available);
   const hasAvailableTools = availableTools.length > 0;
-  const availableDescription = category.slug === "image-tools"
-    ? "Image Resizer, Image Compressor, and Image Converter handle JPG, PNG, and WebP entirely on your device."
-    : category.slug === "pdf-tools"
-      ? "PDF Merge, PDF Split, and PDF Rotate organize documents, while JPG to PDF and PDF to JPG convert between documents and images entirely on your device."
-      : category.slug === "text-tools"
-        ? "JSON Formatter validates and prepares JSON, while QR Code Generator turns text and details into downloadable QR codes entirely on your device."
-        : "";
 
   return (
     <>
@@ -54,8 +47,8 @@ export default async function CategoryPage({ params }: PageProps) {
                   ? `${availableTools.length} ${availableTools.length === 1 ? "tool" : "tools"} available`
                   : "More tools planned"}
               </Badge>
-              <h2>{hasAvailableTools ? `Work with ${category.shortName.toLowerCase()} privately` : "Tools are coming soon"}</h2>
-              <p>{hasAvailableTools ? availableDescription : "This category is still in preview. No files or data are processed here."}</p>
+              <h2>{hasAvailableTools ? category.privateHeading : "Tools are coming soon"}</h2>
+              <p>{hasAvailableTools ? category.availableDescription : "This category is still in preview. No files or data are processed here."}</p>
               {hasAvailableTools ? (
                 <div className="category-tool-actions">
                   {availableTools.map((tool, index) => (

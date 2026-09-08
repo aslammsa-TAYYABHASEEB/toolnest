@@ -29,6 +29,8 @@ export type Category = {
   name: string;
   shortName: string;
   description: string;
+  privateHeading: string;
+  availableDescription: string;
   icon: string;
   accent: string;
 };
@@ -39,14 +41,18 @@ export const categories: Category[] = [
     name: "PDF Tools",
     shortName: "PDF",
     description: "Organize, convert, and prepare PDF documents with ease.",
+    privateHeading: "Work with PDFs privately",
+    availableDescription: "PDF Merge, PDF Split, and PDF Rotate organize documents, while JPG to PDF and PDF to JPG convert between documents and images entirely on your device.",
     icon: "PDF",
     accent: "coral",
   },
   {
     slug: "image-tools",
     name: "Image Tools",
-    shortName: "Images",
+    shortName: "Image",
     description: "Resize, compress, and convert your everyday images.",
+    privateHeading: "Work with images privately",
+    availableDescription: "Image Resizer, Image Compressor, and Image Converter handle JPG, PNG, and WebP entirely on your device.",
     icon: "IMG",
     accent: "violet",
   },
@@ -55,14 +61,18 @@ export const categories: Category[] = [
     name: "Text Tools",
     shortName: "Text",
     description: "Clean, count, format, and transform written content.",
+    privateHeading: "Work with text privately",
+    availableDescription: "JSON Formatter validates and prepares JSON, while QR Code Generator turns text and details into downloadable QR codes entirely on your device.",
     icon: "TXT",
     accent: "blue",
   },
   {
     slug: "calculators",
     name: "Calculators",
-    shortName: "Calculate",
+    shortName: "Calculator",
     description: "Quick calculators for work, study, and daily decisions.",
+    privateHeading: "Calculate privately",
+    availableDescription: "Percentage, age, and unit calculations run instantly in your browser without sending your values anywhere.",
     icon: "123",
     accent: "green",
   },
