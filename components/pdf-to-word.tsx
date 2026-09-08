@@ -257,7 +257,7 @@ export function PdfToWord() {
               progress?.phase === "ocr-download" ||
               progress?.phase === "ocr-orient"
               ? "Some pages have no selectable text, so text is being recognized on-device with OCR — nothing is uploaded."
-              : "Converting PDF text to a Word document…"}
+              : "Converting PDF content to an editable Word document…"}
           </p>
         )}
         {error && (
@@ -269,11 +269,12 @@ export function PdfToWord() {
 
       <div className="privacy-note">
         <p>
-          <strong>Honest about scope.</strong> This tool extracts text from your
-          PDF and builds a Word (.docx) document from it. It works best for
-          text-heavy PDFs. Complex layouts, tables, images, and formatting are
-          not preserved — what you get is the extracted text in paragraphs, not a
-          pixel-perfect copy of the original page.
+          <strong>Honest about scope.</strong> This tool builds an editable Word
+          (.docx) document from readable PDF content. It can use OCR for scanned
+          pages and attempts to reconstruct simple, regular tables. Complex
+          layouts, graphics, embedded images, multi-column designs, and exact
+          formatting may not be preserved, so the result is not a pixel-perfect
+          copy of the original page.
         </p>
       </div>
     </section>

@@ -3,14 +3,15 @@ import { ImageConverter } from "@/components/image-converter";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "Image Converter";
-const description = "Convert JPG, PNG, and WebP images directly in your browser. Keep transparency where supported and download the result in seconds.";
+const title = "Image Converter Online – Convert JPG, PNG & WebP";
+const description = "Convert images between JPG, PNG, and WebP directly in your browser. Keep transparency where supported, adjust quality, and download without uploading files.";
 
 export const metadata: Metadata = {
   title,
   description,
   alternates: { canonical: "/tools/image-converter" },
   openGraph: { title: `${title} | ${siteConfig.name}`, description, url: "/tools/image-converter", type: "website" },
+  twitter: { card: "summary", title: `${title} | ${siteConfig.name}`, description },
 };
 
 const faqs = [

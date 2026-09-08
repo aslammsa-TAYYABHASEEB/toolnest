@@ -3,8 +3,8 @@ import { JpgToPdf } from "@/components/jpg-to-pdf";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "JPG to PDF";
-const description = "Convert JPG, PNG, and WebP images into one ordered PDF directly in your browser, without uploading them.";
+const title = "JPG to PDF Converter – Combine Images into One PDF";
+const description = "Convert JPG, PNG, and WebP images into one ordered PDF directly in your browser. Arrange pages, choose layout options, and keep files on your device.";
 
 export const metadata: Metadata = {
   title,
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
     description,
     url: "/tools/jpg-to-pdf",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
   },
 };
 

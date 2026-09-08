@@ -511,8 +511,9 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .pdf-watermark-shell, .pdf-watermark-panel { min-width: 0; }
 .pdf-watermark-panel { padding: var(--space-4); }
 .pdf-watermark-controls { min-width: 0; display: grid; gap: var(--space-5); margin-top: var(--space-5); }
-.pdf-watermark-grid { min-width: 0; display: grid; gap: var(--space-4); }
+.pdf-watermark-grid { min-width: 0; display: grid; align-items: start; gap: var(--space-4); }
 .pdf-watermark-field { min-width: 0; display: grid; gap: var(--space-2); }
+.pdf-watermark-grid .pdf-watermark-field { align-content: start; }
 .pdf-watermark-field > label { display: flex; justify-content: space-between; gap: var(--space-3); color: var(--color-text); font-size: var(--text-sm); font-weight: 850; }
 .pdf-watermark-field output { color: var(--color-brand-700); }
 .pdf-watermark-field input:not([type="range"]), .pdf-watermark-field select { width: 100%; min-width: 0; min-height: 2.75rem; padding: .72rem .85rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); outline: 0; background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); }

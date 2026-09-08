@@ -1,12 +1,14 @@
 import type { MetadataRoute } from "next";
 import { categories, siteConfig, tools } from "@/lib/site";
+
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticRoutes = ["", "/privacy-policy", "/terms", "/disclaimer", "/contact"];
+  const publicRoutes = ["", "/privacy-policy", "/terms", "/disclaimer", "/contact"];
   const toolRoutes = tools
     .filter((tool) => tool.available && tool.href)
-    .map((tool) => tool.href as string);
+    .map((tool) => tool.href!);
+
   return [
-    ...[...staticRoutes, ...toolRoutes].map((route) => ({
+    ...[...publicRoutes, ...toolRoutes].map((route) => ({
       url: `${siteConfig.url}${route}`,
       changeFrequency: "monthly" as const,
       priority: route === "" ? 1 : 0.4,

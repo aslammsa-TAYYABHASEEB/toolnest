@@ -3,14 +3,15 @@ import { ImageCompressor } from "@/components/image-compressor";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "Image Compressor";
-const description = "Reduce JPG, PNG, and WebP image file sizes directly in your browser while keeping the original dimensions.";
+const title = "Compress Image Online – Reduce JPG, PNG & WebP Size";
+const description = "Compress JPG, PNG, and WebP images directly in your browser while keeping the original dimensions. Compare file sizes and process images on your device.";
 
 export const metadata: Metadata = {
   title,
   description,
   alternates: { canonical: "/tools/image-compressor" },
   openGraph: { title: `${title} | ${siteConfig.name}`, description, url: "/tools/image-compressor", type: "website" },
+  twitter: { card: "summary", title: `${title} | ${siteConfig.name}`, description },
 };
 
 const faqs = [

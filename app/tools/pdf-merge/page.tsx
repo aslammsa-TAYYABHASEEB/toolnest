@@ -3,8 +3,8 @@ import { PdfMerge } from "@/components/pdf-merge";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "PDF Merge";
-const description = "Combine multiple PDF files in your chosen order directly in your browser, without uploading them to a server.";
+const title = "Merge PDF Online – Combine PDF Files Free";
+const description = "Merge multiple PDF files in any order directly in your browser. Free, private, and no file upload to a conversion server.";
 
 export const metadata: Metadata = {
   title,
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
     description,
     url: "/tools/pdf-merge",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
   },
 };
 

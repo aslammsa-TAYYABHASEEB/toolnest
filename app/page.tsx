@@ -18,7 +18,7 @@ export default function HomePage() {
           <Badge tone="brand" className="hero-badge"><span className="live-dot" /> Fast, free &amp; easy to use</Badge>
           <h1>Everyday tools,<br /><em>without the clutter.</em></h1>
           <p>A focused collection of useful tools for files, images, text, and calculations. Quick to find, simple to use.</p>
-          <div className="hero-search"><SearchInput disabled label="Search the planned ToolNest collection" /></div>
+          <div className="hero-search"><SearchInput label="Search ToolNest tools" /></div>
           <div className="hero-actions">
             <Button href="#popular-tools" size="lg">Explore popular tools <span aria-hidden="true">→</span></Button>
             <Button href="#categories" size="lg" variant="secondary">Browse categories</Button>

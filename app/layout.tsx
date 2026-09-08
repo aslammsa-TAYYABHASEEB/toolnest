@@ -4,20 +4,23 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { siteConfig } from "@/lib/site";
 
+const homepageTitle = "ToolNest – Free Online Tools for PDF, Images, Text & Calculators";
+const homepageDescription = "Free online tools for PDFs, images, text, and everyday calculations. Many tools run directly in your browser for a fast, privacy-first experience.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
-  title: { default: `${siteConfig.name} — Simple online tools`, template: `%s | ${siteConfig.name}` },
-  description: siteConfig.description,
+  title: { default: homepageTitle, template: `%s | ${siteConfig.name}` },
+  description: homepageDescription,
   applicationName: siteConfig.name,
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     siteName: siteConfig.name,
-    title: `${siteConfig.name} — Simple online tools`,
-    description: siteConfig.description,
+    title: homepageTitle,
+    description: homepageDescription,
     url: "/",
   },
-  twitter: { card: "summary", title: siteConfig.name, description: siteConfig.description },
+  twitter: { card: "summary", title: homepageTitle, description: homepageDescription },
 };
 
 const themeScript = `

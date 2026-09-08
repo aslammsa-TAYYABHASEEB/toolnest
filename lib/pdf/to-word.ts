@@ -727,7 +727,7 @@ export async function convertPdfToWord(
     if (totalTextLength < 20) {
       throw new PdfProcessingError(
         "word-no-text-found",
-        "No readable text was found in this PDF. It may be a scanned or image-based document â€” text extraction requires selectable text, which this tool cannot OCR.",
+        "No readable text could be recovered from this PDF, even after attempting on-device OCR where needed. Try a clearer scan or a PDF with selectable text.",
       );
     }
 
