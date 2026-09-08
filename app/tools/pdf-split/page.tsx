@@ -3,8 +3,8 @@ import { PdfSplit } from "@/components/pdf-split";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "PDF Split";
-const description = "Extract selected pages or split a PDF into page and range files directly in your browser, without uploading it.";
+const title = "Split PDF Online – Extract Pages or Page Ranges";
+const description = "Split a PDF into selected pages, individual pages, or custom ranges directly in your browser. Free, private, and no file upload required.";
 
 export const metadata: Metadata = {
   title,
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
     description,
     url: "/tools/pdf-split",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
   },
 };
 

@@ -16,6 +16,11 @@ export const metadata: Metadata = {
     url: "/tools/qr-code-generator",
     type: "website",
   },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
+  },
 };
 
 const faqs = [

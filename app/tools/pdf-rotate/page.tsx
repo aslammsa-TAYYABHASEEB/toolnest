@@ -3,8 +3,8 @@ import { PdfRotate } from "@/components/pdf-rotate";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "PDF Rotate";
-const description = "Rotate all or selected PDF pages locally in your browser while preserving vector text, page order, dimensions, and document quality.";
+const title = "Rotate PDF Online – Turn Selected PDF Pages";
+const description = "Rotate all or selected PDF pages clockwise, counter-clockwise, or 180 degrees directly in your browser without flattening the document or uploading it.";
 
 export const metadata: Metadata = {
   title,
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
     description,
     url: "/tools/pdf-rotate",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
   },
 };
 

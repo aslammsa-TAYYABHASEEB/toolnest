@@ -17,6 +17,11 @@ export const metadata: Metadata = {
     url: "/tools/pdf-to-word",
     type: "website",
   },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
+  },
 };
 
 const faqs = [

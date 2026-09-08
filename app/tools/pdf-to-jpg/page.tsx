@@ -3,8 +3,8 @@ import { PdfToJpg } from "@/components/pdf-to-jpg";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "PDF to JPG";
-const description = "Convert PDF pages into JPG or PNG images directly in your browser, with page selection, quality, scale, and private downloads.";
+const title = "PDF to JPG Converter – Export PDF Pages as Images";
+const description = "Convert all or selected PDF pages to JPG or PNG images directly in your browser. Choose quality and scale, then download privately without file uploads.";
 
 export const metadata: Metadata = {
   title,
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
     description,
     url: "/tools/pdf-to-jpg",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
   },
 };
 

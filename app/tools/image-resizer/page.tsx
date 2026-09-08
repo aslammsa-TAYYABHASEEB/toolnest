@@ -3,8 +3,8 @@ import { ImageResizer } from "@/components/image-resizer";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "Image Resizer";
-const description = "Resize JPG, PNG, and WebP images by exact pixel dimensions or percentage directly in your browser.";
+const title = "Resize Image Online – Change JPG, PNG & WebP Size";
+const description = "Resize JPG, PNG, and WebP images by exact pixels or percentage directly in your browser. Keep control of dimensions and process files on your device.";
 
 export const metadata: Metadata = {
   title,
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
     description,
     url: "/tools/image-resizer",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
   },
 };
 

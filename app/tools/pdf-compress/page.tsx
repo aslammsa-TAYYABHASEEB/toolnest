@@ -3,8 +3,8 @@ import { PdfCompress } from "@/components/pdf-compress";
 import { PageHeader } from "@/components/ui/page-header";
 import { siteConfig } from "@/lib/site";
 
-const title = "Compress PDF";
-const description = "Reduce PDF file size in your browser with structure optimization or image re-encoding, without uploading anything.";
+const title = "Compress PDF Online – Reduce PDF File Size";
+const description = "Reduce PDF file size in your browser with structure optimization or image re-encoding. Choose the trade-off you need without uploading the document.";
 
 export const metadata: Metadata = {
   title,
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
     description,
     url: "/tools/pdf-compress",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: `${title} | ${siteConfig.name}`,
+    description,
   },
 };
 
