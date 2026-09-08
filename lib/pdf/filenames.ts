@@ -67,6 +67,10 @@ export function makeCompressedPdfFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}-compressed.pdf`;
 }
 
+export function makeWatermarkedPdfFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}-watermarked.pdf`;
+}
+
 export function makeWordFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}.docx`;
 }
