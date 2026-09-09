@@ -2,7 +2,13 @@ import type { MetadataRoute } from "next";
 import { categories, siteConfig, tools } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const publicRoutes = ["", "/privacy-policy", "/terms", "/disclaimer", "/contact"];
+  const publicRoutes = [
+    "",
+    "/privacy-policy",
+    "/terms",
+    "/disclaimer",
+    ...(siteConfig.contactEmail ? ["/contact"] : []),
+  ];
   const toolRoutes = tools
     .filter((tool) => tool.available && tool.href)
     .map((tool) => tool.href!);

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PercentageCalculator } from "@/components/percentage-calculator";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Percentage Calculator – Find Percent, Value, and Change";
@@ -116,6 +117,7 @@ export default function PercentageCalculatorPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/percentage-calculator" />
     </>
   );
 }

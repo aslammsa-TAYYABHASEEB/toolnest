@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JpgToPdf } from "@/components/jpg-to-pdf";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "JPG to PDF Converter – Combine Images into One PDF";
@@ -182,6 +183,7 @@ export default function JpgToPdfPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/jpg-to-pdf" />
     </>
   );
 }

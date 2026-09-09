@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PdfToWord } from "@/components/pdf-to-word";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "PDF to Word Converter – Convert PDF to Editable DOCX";
@@ -192,6 +193,7 @@ export default function PdfToWordPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/pdf-to-word" />
     </>
   );
 }

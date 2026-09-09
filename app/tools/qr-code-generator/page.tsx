@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { QrCodeGenerator } from "@/components/qr-code-generator";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "QR Code Generator – Create QR Codes Free";
@@ -147,6 +148,7 @@ export default function QrCodeGeneratorPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/qr-code-generator" />
     </>
   );
 }

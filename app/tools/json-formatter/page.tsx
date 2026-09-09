@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JsonFormatter } from "@/components/json-formatter";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "JSON Formatter & Validator – Format JSON Online";
@@ -147,6 +148,7 @@ export default function JsonFormatterPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/json-formatter" />
     </>
   );
 }

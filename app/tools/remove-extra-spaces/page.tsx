@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { TextCleaner } from "@/components/text-cleaner";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Remove Extra Spaces – Clean Whitespace & Blank Lines";
@@ -117,6 +118,7 @@ export default function RemoveExtraSpacesPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/remove-extra-spaces" />
     </>
   );
 }

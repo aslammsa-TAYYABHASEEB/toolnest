@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { WordCounter } from "@/components/word-counter";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Word Counter – Count Words, Characters, Sentences & Reading Time";
@@ -121,6 +122,7 @@ export default function WordCounterPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/word-counter" />
     </>
   );
 }

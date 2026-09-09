@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ImageConverter } from "@/components/image-converter";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Image Converter Online – Convert JPG, PNG & WebP";
@@ -56,6 +57,7 @@ export default function ImageConverterPage() {
           <div className="faq-section"><span className="kicker">Helpful answers</span><h2>Image Converter FAQs</h2><div>{faqs.map(({ question, answer }) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/image-converter" />
     </>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ImageCompressor } from "@/components/image-compressor";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Compress Image Online – Reduce JPG, PNG & WebP Size";
@@ -72,6 +73,7 @@ export default function ImageCompressorPage() {
           <div className="faq-section"><span className="kicker">Helpful answers</span><h2>Image Compressor FAQs</h2><div>{faqs.map(({ question, answer }) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/image-compressor" />
     </>
   );
 }

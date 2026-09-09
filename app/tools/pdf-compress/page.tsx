@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PdfCompress } from "@/components/pdf-compress";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Compress PDF Online – Reduce PDF File Size";
@@ -170,6 +171,7 @@ export default function PdfCompressPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/pdf-compress" />
     </>
   );
 }

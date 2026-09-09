@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PdfToJpg } from "@/components/pdf-to-jpg";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "PDF to JPG Converter – Export PDF Pages as Images";
@@ -183,6 +184,7 @@ export default function PdfToJpgPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/pdf-to-jpg" />
     </>
   );
 }

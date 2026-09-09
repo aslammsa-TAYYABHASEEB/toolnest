@@ -213,6 +213,22 @@ NEXT_PUBLIC_CONTACT_EMAIL=support@example.com
 
 `NEXT_PUBLIC_SITE_URL` must be the final HTTPS origin without a path. It supplies canonical URLs, Open Graph URLs, `robots.txt`, and the sitemap. The contact address is intentionally public and is used for the contact route.
 
+### Notify IndexNow after publishing
+
+ToolNest includes a public verification file and a dependency-free submission script for IndexNow. Run it only after the latest build is live and the production URL is configured:
+
+```bash
+npm run indexnow:submit -- --site=https://tools.example.com --all
+```
+
+`--all` reads the deployed sitemap and submits its canonical URLs in one request. To notify only changed pages, pass same-site paths or full URLs instead:
+
+```bash
+npm run indexnow:submit -- --site=https://tools.example.com /tools/pdf-merge /tools/pdf-split
+```
+
+The script refuses non-HTTPS origins and off-site URLs. If the public key is rotated, update `public/indexnow-key.txt`; the submission script reads that file directly.
+
 The released tools support current desktop and mobile versions of Chrome, Edge, Firefox, and Safari where the required Canvas, Blob, object URL, Web Worker, and file download APIs are available. Use HTTPS in production. Processing capacity depends on the browser and device: images are limited to 20 MB each, PDF workflows to 100 MB total, and individual tools impose additional page, output, pixel, or memory safeguards. Password-protected PDFs are unsupported. Editing a PDF can invalidate its existing digital signatures.
 
 Before launch:

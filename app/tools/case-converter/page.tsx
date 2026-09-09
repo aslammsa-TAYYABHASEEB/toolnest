@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CaseConverter } from "@/components/case-converter";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Case Converter – Switch Uppercase, Lowercase & Title Case";
@@ -117,6 +118,7 @@ export default function CaseConverterPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/case-converter" />
     </>
   );
 }

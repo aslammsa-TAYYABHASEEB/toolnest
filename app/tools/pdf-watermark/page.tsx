@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PdfWatermark } from "@/components/pdf-watermark";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "PDF Watermark – Add Text or Logo Watermark to PDF";
@@ -197,6 +198,7 @@ export default function PdfWatermarkPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/pdf-watermark" />
     </>
   );
 }

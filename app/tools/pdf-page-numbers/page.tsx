@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PdfPageNumbers } from "@/components/pdf-page-numbers";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "PDF Page Numbers – Add Page Numbers to PDF Online";
@@ -111,11 +111,6 @@ export default function PdfPageNumbersPage() {
               <li>Starting number and total formats</li>
               <li>Adjustable size and margins</li>
             </ul>
-            <div className="pdf-page-number-related">
-              <p>Need to add a logo or text mark?</p>
-              <Link href="/tools/pdf-watermark">Try PDF Watermark →</Link>
-              <Link href="/tools/pdf-split">Extract pages with PDF Split →</Link>
-            </div>
           </aside>
         </div>
       </section>
@@ -188,6 +183,7 @@ export default function PdfPageNumbersPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/pdf-page-numbers" />
     </>
   );
 }

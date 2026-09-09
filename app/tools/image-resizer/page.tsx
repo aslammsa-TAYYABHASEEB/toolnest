@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ImageResizer } from "@/components/image-resizer";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Resize Image Online – Change JPG, PNG & WebP Size";
@@ -178,6 +179,7 @@ export default function ImageResizerPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/image-resizer" />
     </>
   );
 }

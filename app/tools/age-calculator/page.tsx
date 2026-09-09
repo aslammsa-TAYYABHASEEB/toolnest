@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AgeCalculator } from "@/components/age-calculator";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Age Calculator – Calculate Exact Age in Years, Months, and Days";
@@ -117,6 +118,7 @@ export default function AgeCalculatorPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/age-calculator" />
     </>
   );
 }

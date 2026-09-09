@@ -71,8 +71,8 @@ export default async function CategoryPage({ params }: PageProps) {
       <PageHeader title={category.name} description={category.description} eyebrow="Tool category" accent={category.accent} icon={category.icon} />
       <section className="section">
         <div className="container">
-          <div className="section-heading compact"><div><h2>{category.shortName} tools</h2></div><p>{categoryTools.length} useful tools in the ToolNest collection.</p></div>
-          <div className="tool-grid">{categoryTools.map((tool) => <ToolCard key={tool.name} tool={tool} />)}</div>
+          <div className="section-heading compact"><div><h2>{category.shortName} tools</h2></div><p>{availableTools.length} free tools available now.</p></div>
+          <div className="tool-grid">{availableTools.map((tool) => <ToolCard key={tool.name} tool={tool} />)}</div>
           <div className="category-preview-grid">
             {!hasAvailableTools && <UploadDropzone />}
             <aside className="coming-soon-panel">

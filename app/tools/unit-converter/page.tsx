@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { UnitConverter } from "@/components/unit-converter";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Unit Converter – Convert Length, Weight, and Temperature";
@@ -117,6 +118,7 @@ export default function UnitConverterPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/unit-converter" />
     </>
   );
 }

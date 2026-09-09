@@ -17,7 +17,7 @@ export default function HomePage() {
         <div className="container hero-content">
           <Badge tone="brand" className="hero-badge"><span className="live-dot" /> Fast, free &amp; easy to use</Badge>
           <h1>Everyday tools,<br /><em>without the clutter.</em></h1>
-          <p>A focused collection of useful tools for files, images, text, and calculations. Quick to find, simple to use.</p>
+          <p>Free online PDF, image, text, and calculator tools. Many run directly in your browser for a fast, privacy-first experience.</p>
           <div className="hero-search"><SearchInput label="Search ToolNest tools" /></div>
           <div className="hero-actions">
             <Button href="#popular-tools" size="lg">Explore popular tools <span aria-hidden="true">→</span></Button>
@@ -49,7 +49,7 @@ export default function HomePage() {
         <div className="container">
           <div className="section-heading">
             <div><span className="kicker">Popular tools</span><h2>Useful shortcuts for everyday work</h2></div>
-            <p>Start with the tools available today and see what is coming next.</p>
+            <p>Open a popular tool now, or browse a category for more options.</p>
           </div>
           <div className="tool-grid">
             {popularTools.map((tool) => <ToolCard key={tool.name} tool={tool} />)}

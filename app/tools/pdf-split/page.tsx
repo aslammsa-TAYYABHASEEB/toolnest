@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PdfSplit } from "@/components/pdf-split";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Split PDF Online – Extract Pages or Page Ranges";
@@ -164,6 +165,7 @@ export default function PdfSplitPage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/pdf-split" />
     </>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PdfRotate } from "@/components/pdf-rotate";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Rotate PDF Online – Turn Selected PDF Pages";
@@ -185,6 +186,7 @@ export default function PdfRotatePage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/pdf-rotate" />
     </>
   );
 }

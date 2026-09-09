@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PdfMerge } from "@/components/pdf-merge";
 import { PageHeader } from "@/components/ui/page-header";
+import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
 const title = "Merge PDF Online – Combine PDF Files Free";
@@ -159,6 +160,7 @@ export default function PdfMergePage() {
           </div>
         </div>
       </section>
+      <RelatedTools currentHref="/tools/pdf-merge" />
     </>
   );
 }
