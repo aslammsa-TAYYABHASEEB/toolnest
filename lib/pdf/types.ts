@@ -16,6 +16,8 @@ export const MAX_PDF_ROTATE_THUMBNAIL_PIXELS = 6 * 1024 * 1024;
 export const MAX_PDF_ROTATE_OUTPUT_SIZE = 200 * 1024 * 1024;
 export const MAX_PDF_WATERMARK_SOURCE_PAGES = 1000;
 export const MAX_PDF_WATERMARK_OUTPUT_SIZE = 200 * 1024 * 1024;
+export const MAX_PDF_PAGE_NUMBER_SOURCE_PAGES = 1000;
+export const MAX_PDF_PAGE_NUMBER_OUTPUT_SIZE = 200 * 1024 * 1024;
 
 export type PdfMergeStatus =
   | "idle"
@@ -203,6 +205,43 @@ export type PdfImageWatermarkOptions = {
   angle: PdfWatermarkAngle;
   position: PdfWatermarkPosition;
   pages: number[];
+};
+
+export type PdfPageNumberPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
+export type PdfPageNumberFormat =
+  | "number"
+  | "page-number"
+  | "number-of-total"
+  | "page-number-of-total";
+
+export type PdfPageNumberMargin = "small" | "medium" | "large";
+
+export type PdfPageNumberSource = PdfFileMetadata;
+
+export type PdfPageNumberOptions = {
+  position: PdfPageNumberPosition;
+  startingNumber: number;
+  pages: number[];
+  fontSize: number;
+  margin: PdfPageNumberMargin;
+  format: PdfPageNumberFormat;
+  prefix: string;
+  suffix: string;
+};
+
+export type PdfPageNumberResult = {
+  blob: Blob;
+  filename: string;
+  size: number;
+  pageCount: number;
+  numberedPageCount: number;
 };
 
 export type CompressionLevel = "light" | "balanced" | "strong";

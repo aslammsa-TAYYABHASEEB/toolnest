@@ -71,6 +71,10 @@ export function makeWatermarkedPdfFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}-watermarked.pdf`;
 }
 
+export function makePageNumberedPdfFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}-numbered.pdf`;
+}
+
 export function makeWordFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}.docx`;
 }
