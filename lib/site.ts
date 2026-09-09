@@ -22,6 +22,7 @@ export type Tool = {
   popular?: boolean;
   available?: boolean;
   href?: string;
+  keywords?: string[];
 };
 
 export type Category = {
@@ -84,7 +85,7 @@ export const tools: Tool[] = [
   { name: "JPG to PDF", description: "Turn ordered JPG, PNG, and WebP images into one private PDF.", category: "pdf-tools", icon: "J", popular: true, available: true, href: "/tools/jpg-to-pdf" },
   { name: "PDF to JPG", description: "Render PDF pages as private JPG or PNG image downloads.", category: "pdf-tools", icon: "I", popular: true, available: true, href: "/tools/pdf-to-jpg" },
   { name: "PDF Rotate", description: "Rotate all or selected PDF pages without flattening their content.", category: "pdf-tools", icon: "R", popular: true, available: true, href: "/tools/pdf-rotate" },
-  { name: "PDF Watermark", description: "Add a text watermark to all or selected PDF pages privately in your browser.", category: "pdf-tools", icon: "WM", available: true, href: "/tools/pdf-watermark" },
+  { name: "PDF Watermark", description: "Add text, image, or logo watermarks to PDF pages privately in your browser.", category: "pdf-tools", icon: "WM", available: true, href: "/tools/pdf-watermark", keywords: ["pdf watermark", "logo watermark", "image watermark", "add logo to pdf"] },
   { name: "Compress PDF", description: "Reduce PDF file size while keeping it readable.", category: "pdf-tools", icon: "C", popular: true, available: true, href: "/tools/pdf-compress" },
   { name: "PDF to Word", description: "Convert PDF text to a downloadable Word document privately in your browser.", category: "pdf-tools", icon: "W", available: true, href: "/tools/pdf-to-word" },
   { name: "Image Resizer", description: "Resize JPG, PNG, and WebP images privately by pixels or percentage.", category: "image-tools", icon: "R", popular: true, available: true, href: "/tools/image-resizer" },

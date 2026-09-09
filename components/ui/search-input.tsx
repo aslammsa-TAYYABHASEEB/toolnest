@@ -22,7 +22,7 @@ export function SearchInput({ label = "Search tools", className, ...props }: Sea
       .filter((tool) => tool.available && tool.href)
       .filter((tool) => {
         const categoryName = categoryNames.get(tool.category) ?? "";
-        const searchable = [tool.name, tool.description, tool.category, categoryName]
+        const searchable = [tool.name, tool.description, tool.category, categoryName, ...(tool.keywords ?? [])]
           .join(" ")
           .toLowerCase();
         return searchable.includes(normalizedQuery);

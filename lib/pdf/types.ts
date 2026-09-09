@@ -187,6 +187,24 @@ export type PdfWatermarkResult = {
   watermarkedPageCount: number;
 };
 
+export type PdfWatermarkImageFormat = "jpeg" | "png" | "webp";
+
+export type PdfWatermarkImage = {
+  file: File;
+  format: PdfWatermarkImageFormat;
+  width: number;
+  height: number;
+};
+
+export type PdfImageWatermarkOptions = {
+  image: PdfWatermarkImage;
+  sizePercent: number;
+  opacity: number;
+  angle: PdfWatermarkAngle;
+  position: PdfWatermarkPosition;
+  pages: number[];
+};
+
 export type CompressionLevel = "light" | "balanced" | "strong";
 
 export type CompressedPdf = {

@@ -1,10 +1,16 @@
-import { degrees, rgb, StandardFonts, type PDFFont } from "pdf-lib";
+import { degrees, rgb, StandardFonts, type PDFFont, type PDFImage } from "pdf-lib";
+import { ImageProcessingError } from "@/lib/image/errors";
+import { convertWebpToPngBytes } from "@/lib/image/pdf-compatible-image";
+import { readImageMetadata } from "@/lib/image/load-image";
+import { MAX_IMAGE_DIMENSION, MAX_IMAGE_PIXEL_AREA } from "@/lib/image/types";
 import { PdfProcessingError } from "@/lib/pdf/errors";
 import { makeWatermarkedPdfFilename } from "@/lib/pdf/filenames";
 import { loadPdfDocument } from "@/lib/pdf/loading";
 import {
   MAX_PDF_WATERMARK_OUTPUT_SIZE,
   MAX_PDF_WATERMARK_SOURCE_PAGES,
+  type PdfImageWatermarkOptions,
+  type PdfWatermarkImage,
   type PdfWatermarkOptions,
   type PdfWatermarkPosition,
   type PdfWatermarkResult,
@@ -13,6 +19,8 @@ import {
 import { validatePdfTotalSize } from "@/lib/pdf/validation";
 
 const WATERMARK_MARGIN = 24;
+export const MIN_WATERMARK_IMAGE_SIZE = 5;
+export const MAX_WATERMARK_IMAGE_SIZE = 60;
 const ALLOWED_ANGLES = new Set([0, 45, -45, 90]);
 const ALLOWED_POSITIONS = new Set<PdfWatermarkPosition>([
   "center",
@@ -153,6 +161,116 @@ function validateOptions(options: PdfWatermarkOptions, pageCount: number) {
   }
 }
 
+function validateCommonOptions(
+  options: Pick<PdfImageWatermarkOptions, "opacity" | "angle" | "position" | "pages">,
+  pageCount: number,
+) {
+  if (
+    !Number.isFinite(options.opacity)
+    || options.opacity < 0.05
+    || options.opacity > 1
+    || !ALLOWED_ANGLES.has(options.angle)
+    || !ALLOWED_POSITIONS.has(options.position)
+  ) {
+    throw new PdfProcessingError(
+      "watermark-invalid-options",
+      "Check the watermark opacity, angle, and position.",
+    );
+  }
+  if (options.pages.length === 0) {
+    throw new PdfProcessingError(
+      "invalid-page-selection",
+      "Choose at least one page to watermark.",
+    );
+  }
+  if (options.pages.some((page) => !Number.isInteger(page) || page < 1 || page > pageCount)) {
+    throw new PdfProcessingError(
+      "page-out-of-range",
+      `Choose pages between 1 and ${pageCount}.`,
+    );
+  }
+}
+
+function fittedImageMetrics(
+  image: PDFImage,
+  sizePercent: number,
+  angle: number,
+  pageWidth: number,
+  pageHeight: number,
+) {
+  const requestedWidth = pageWidth * sizePercent / 100;
+  const aspectRatio = image.height / image.width;
+  const requestedHeight = requestedWidth * aspectRatio;
+  const initialBounds = rotatedBounds(requestedWidth, requestedHeight, angle);
+  const availableWidth = Math.max(1, pageWidth - WATERMARK_MARGIN * 2);
+  const availableHeight = Math.max(1, pageHeight - WATERMARK_MARGIN * 2);
+  const scale = Math.min(
+    1,
+    availableWidth / Math.max(1, initialBounds.width),
+    availableHeight / Math.max(1, initialBounds.height),
+  );
+  const width = requestedWidth * scale;
+  const height = requestedHeight * scale;
+  return { width, height, bounds: rotatedBounds(width, height, angle) };
+}
+
+async function embedWatermarkImage(
+  document: Awaited<ReturnType<typeof loadPdfDocument>>,
+  image: PdfWatermarkImage,
+) {
+  const bytes = image.format === "webp"
+    ? await convertWebpToPngBytes(image.file)
+    : new Uint8Array(await image.file.arrayBuffer());
+  try {
+    return image.format === "jpeg"
+      ? await document.embedJpg(bytes)
+      : await document.embedPng(bytes);
+  } catch {
+    throw new PdfProcessingError(
+      "watermark-image-invalid",
+      "This image could not be embedded. It may be corrupt or incomplete.",
+    );
+  }
+}
+
+export async function readPdfWatermarkImage(file: File): Promise<PdfWatermarkImage> {
+  try {
+    const metadata = await readImageMetadata(file);
+    const pixels = metadata.width * metadata.height;
+    if (
+      metadata.width > MAX_IMAGE_DIMENSION
+      || metadata.height > MAX_IMAGE_DIMENSION
+      || pixels > MAX_IMAGE_PIXEL_AREA
+    ) {
+      throw new PdfProcessingError(
+        "watermark-image-too-large",
+        `Choose an image no larger than ${MAX_IMAGE_DIMENSION.toLocaleString()} pixels per side or 64 megapixels.`,
+      );
+    }
+    return metadata;
+  } catch (caught) {
+    if (caught instanceof PdfProcessingError) throw caught;
+    if (caught instanceof ImageProcessingError) {
+      const unsupported = caught.code === "unsupported-type";
+      const tooLarge = caught.code === "file-too-large";
+      throw new PdfProcessingError(
+        unsupported
+          ? "watermark-image-unsupported"
+          : tooLarge
+            ? "watermark-image-too-large"
+            : "watermark-image-invalid",
+        unsupported
+          ? "This image format is not supported for watermarking. Please use a PNG, JPG, or WebP image."
+          : caught.message,
+      );
+    }
+    throw new PdfProcessingError(
+      "watermark-image-invalid",
+      "This image could not be opened. It may be corrupt or unsupported by your browser.",
+    );
+  }
+}
+
 export async function readPdfWatermarkMetadata(
   file: File,
   id: string,
@@ -244,6 +362,94 @@ export async function applyPdfWatermark(
       caught instanceof Error
         ? caught.message
         : "The browser could not create the watermarked PDF.",
+    );
+  }
+}
+
+export async function applyPdfImageWatermark(
+  source: PdfWatermarkSource,
+  options: PdfImageWatermarkOptions,
+): Promise<PdfWatermarkResult> {
+  if (!options.image) {
+    throw new PdfProcessingError(
+      "watermark-image-missing",
+      "Choose a logo or image to use as the watermark.",
+    );
+  }
+  if (
+    !Number.isFinite(options.sizePercent)
+    || options.sizePercent < MIN_WATERMARK_IMAGE_SIZE
+    || options.sizePercent > MAX_WATERMARK_IMAGE_SIZE
+  ) {
+    throw new PdfProcessingError(
+      "watermark-invalid-options",
+      `Choose a logo size between ${MIN_WATERMARK_IMAGE_SIZE}% and ${MAX_WATERMARK_IMAGE_SIZE}%.`,
+    );
+  }
+  validateCommonOptions(options, source.pageCount);
+
+  try {
+    const document = await loadPdfDocument(source.file);
+    const pages = document.getPages();
+    assertPageCount(pages.length, source.file.name);
+    if (pages.length !== source.pageCount) {
+      throw new PdfProcessingError(
+        "watermark-failed",
+        "The PDF page count changed while it was being prepared. Select the file again.",
+      );
+    }
+
+    const embeddedImage = await embedWatermarkImage(document, options.image);
+    const selectedPages = Array.from(new Set(options.pages));
+    for (const pageNumber of selectedPages) {
+      const page = pages[pageNumber - 1];
+      const { width: pageWidth, height: pageHeight } = page.getSize();
+      const metrics = fittedImageMetrics(
+        embeddedImage,
+        options.sizePercent,
+        options.angle,
+        pageWidth,
+        pageHeight,
+      );
+      const coordinates = placement(
+        options.position,
+        pageWidth,
+        pageHeight,
+        metrics.bounds,
+      );
+      page.drawImage(embeddedImage, {
+        ...coordinates,
+        width: metrics.width,
+        height: metrics.height,
+        rotate: degrees(options.angle),
+        opacity: options.opacity,
+      });
+    }
+
+    const saved = await document.save();
+    if (saved.byteLength > MAX_PDF_WATERMARK_OUTPUT_SIZE) {
+      throw new PdfProcessingError(
+        "watermark-output-too-large",
+        `The watermarked PDF is larger than ${Math.round(MAX_PDF_WATERMARK_OUTPUT_SIZE / 1024 / 1024)} MB and was not prepared for download.`,
+      );
+    }
+    const bytes = new Uint8Array(saved.byteLength);
+    bytes.set(saved);
+    const blob = new Blob([bytes.buffer], { type: "application/pdf" });
+    return {
+      blob,
+      filename: makeWatermarkedPdfFilename(source.file.name),
+      size: blob.size,
+      pageCount: pages.length,
+      watermarkedPageCount: selectedPages.length,
+    };
+  } catch (caught) {
+    if (caught instanceof PdfProcessingError) throw caught;
+    throw new PdfProcessingError(
+      "watermark-failed",
+      caught instanceof Error
+        ? caught.message
+        : "The browser could not create the image-watermarked PDF.",
     );
   }
 }

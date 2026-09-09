@@ -42,7 +42,11 @@ export type PdfProcessingErrorCode =
     | "watermark-invalid-options"
     | "watermark-unsupported-text"
     | "watermark-failed"
-    | "watermark-output-too-large";
+    | "watermark-output-too-large"
+    | "watermark-image-missing"
+    | "watermark-image-unsupported"
+    | "watermark-image-invalid"
+    | "watermark-image-too-large";
 
 export class PdfProcessingError extends Error {
   constructor(
