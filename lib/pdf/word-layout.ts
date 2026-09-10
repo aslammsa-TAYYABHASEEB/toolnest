@@ -11,16 +11,19 @@ export interface WordParagraph {
   kind: "paragraph" | "heading" | "signature";
   lines: WordLine[]; x: number; right: number; y: number; bottom: number;
   alignment: "left" | "center" | "right"; firstIndent: number; pitch: number;
+  ocrConfidence?:number;
 }
 export interface WordTable {
   kind: "table"; x: number; right: number; y: number; bottom: number;
   edges: number[]; rows: WordLine[][][]; rowHeights: number[];
   ruled: boolean; continuation?: boolean;
 }
-export type WordBlock = WordParagraph | WordTable;
+export interface WordImage {kind:"image";x:number;right:number;y:number;bottom:number;data:Uint8Array}
+export type WordBlock = WordParagraph | WordTable | WordImage;
 export interface WordPage {
   width: number; height: number; left: number; right: number; top: number;
   blocks: WordBlock[];
+  ocr?:boolean; ocrHeader?:string[]; ocrFooter?:string[];
 }
 
 export const median = (values: number[], fallback = 12) => {

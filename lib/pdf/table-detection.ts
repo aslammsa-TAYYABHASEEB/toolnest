@@ -367,7 +367,7 @@ export interface OcrLineBox {
 }
 
 export type OcrPageBlock =
-  | { kind: "table"; table: DetectedTable }
+  | { kind: "table"; table: DetectedTable; lines: OcrLineBox[] }
   | { kind: "prose"; lines: OcrLineBox[] };
 
 // OCR tuning (pixel coordinates at the OCR render scale).
@@ -524,7 +524,7 @@ export function partitionOcrLinesIntoBlocks(
     const table = buildOcrTableFromRun(run);
     if (table) {
       flushProse();
-      blocks.push({ kind: "table", table });
+      blocks.push({ kind: "table", table, lines: runOriginal });
     } else {
       prose.push(...runOriginal);
     }

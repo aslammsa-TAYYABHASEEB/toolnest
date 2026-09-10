@@ -14,12 +14,8 @@ import {
 } from "docx";
 import { extractWordPage } from "./word-extraction";
 import { createWordDocument } from "./word-document";
-import { type WordPage, type WordSpan } from "./word-layout";
-import {
-  partitionOcrLinesIntoBlocks,
-  type OcrLineBox,
-  type OcrPageBlock,
-} from "@/lib/pdf/table-detection";
+import { type WordPage } from "./word-layout";
+import {recognitionLines,buildOcrWordPage,finalizeOcrPages,decorativeBand,fitOcrText,type OcrLayoutLine} from './ocr-word-layout';
 
 function assertNotAborted(signal?: AbortSignal) {
   if (signal?.aborted) {
@@ -56,14 +52,8 @@ const OCR_MIN_GOOD_WORDS = 12;
 
 type OcrLoggerMessage = { status?: string; progress?: number };
 
-type OcrLine = { text: string; x0: number; y0: number; x1: number; y1: number };
-
-type OcrWord = { text: string; x0: number; x1: number; confidence: number };
-
 type OcrRecognition = {
-  lines: OcrLine[];
-  /** Word-level detail (bbox + confidence) used for table detection. */
-  lineWords: OcrWord[][];
+  layout: OcrLayoutLine[];
   plainText: string;
   confidence: number;
 };
@@ -143,53 +133,9 @@ async function createOcrEngine(
       // { blocks: true } data.blocks is always null and only flat data.text
       // is returned (no bbox/layout info).
       const { data } = await recWorker.recognize(image, {}, { blocks: true });
-      const lines: OcrLine[] = [];
-      const lineWords: OcrWord[][] = [];
-      if (Array.isArray(data?.blocks)) {
-        for (const block of data.blocks) {
-          for (const para of block?.paragraphs ?? []) {
-            for (const line of para?.lines ?? []) {
-              const text = (line?.text ?? "").replace(/\s+/g, " ").trim();
-              const bbox = line?.bbox;
-              const words: OcrWord[] = ((line?.words ?? []) as {
-                text?: string;
-                bbox?: { x0?: number; x1?: number };
-                confidence?: number;
-              }[])
-                .map((w) => ({
-                  text: (w?.text ?? "").trim(),
-                  x0: w?.bbox?.x0 ?? 0,
-                  x1: w?.bbox?.x1 ?? 0,
-                  confidence: w?.confidence ?? 0,
-                }))
-                .filter((w) => w.text && w.x1 > w.x0);
-              if (text && bbox) {
-                lines.push({
-                  text,
-                  x0: bbox.x0,
-                  y0: bbox.y0,
-                  x1: bbox.x1,
-                  y1: bbox.y1,
-                });
-                lineWords.push(words);
-              } else if (text) {
-                lines.push({
-                  text,
-                  x0: 0,
-                  y0: lines.length,
-                  x1: 0,
-                  y1: lines.length,
-                });
-                lineWords.push(words);
-              }
-            }
-          }
-        }
-      }
       const plainText = typeof data?.text === "string" ? data.text : "";
       return {
-        lines,
-        lineWords,
+        layout: recognitionLines(data),
         plainText,
         confidence: typeof data?.confidence === "number" ? data.confidence : 0,
       };
@@ -203,110 +149,7 @@ async function createOcrEngine(
   };
 }
 
-/**
- * Group OCR'd lines (each with a bounding box) into paragraphs using the same
- * adaptive line-pitch + list-marker strategy as the text-extraction path.
- *
- * OCR coordinates are screen-space (y grows downward), so rows are read
- * top-to-bottom by ascending y0. Several recognized lines can share one
- * visual row (columns/table cells); their segments are joined so column
- * structure stays readable instead of collapsing into character soup.
- */
-function groupOcrLinesIntoParagraphs(lines: OcrLine[]): string[] {
-  const usable = lines.filter((line) => line.text.trim());
-  if (!usable.length) return [];
-
-  // Sort top-to-bottom, then left-to-right (4px row jitter tolerance).
-  usable.sort((a, b) => (Math.abs(a.y0 - b.y0) > 4 ? a.y0 - b.y0 : a.x0 - b.x0));
-
-  // Median line height for jitter-tolerant row clustering.
-  const heights = usable
-    .map((line) => line.y1 - line.y0)
-    .filter((h) => h > 0)
-    .sort((a, b) => a - b);
-  const lineHeight = heights.length
-    ? heights[Math.floor(heights.length / 2)]
-    : 12;
-
-  // Cluster lines into visual rows.
-  const rows: { y0: number; x0: number; segments: string[] }[] = [];
-  for (const line of usable) {
-    const last = rows[rows.length - 1];
-    if (last && Math.abs(line.y0 - last.y0) <= 0.6 * lineHeight) {
-      last.segments.push(line.text);
-    } else {
-      rows.push({ y0: line.y0, x0: line.x0, segments: [line.text] });
-    }
-  }
-
-  // Dominant row pitch (mode of consecutive row gaps, rounded to 0.5px).
-  const gapCounts = new Map<number, number>();
-  for (let i = 1; i < rows.length; i++) {
-    const gap = rows[i].y0 - rows[i - 1].y0;
-    if (gap > 0.6 * lineHeight) {
-      const key = Math.round(gap * 2) / 2;
-      gapCounts.set(key, (gapCounts.get(key) ?? 0) + 1);
-    }
-  }
-  let dominantPitch = 0;
-  if (gapCounts.size >= 3) {
-    let bestCount = 0;
-    for (const [pitch, count] of gapCounts) {
-      if (count > bestCount || (count === bestCount && pitch < dominantPitch)) {
-        dominantPitch = pitch;
-        bestCount = count;
-      }
-    }
-  }
-
-  // Same list-marker rule as the text path.
-  const LIST_MARKER_RE =
-    /^(\(?[ivxlcdm]{1,6}\)?[.)]|\(?\d{1,3}\)?[.)]|\(?[a-z]\)?[.)])$/i;
-
-  const paragraphs: string[] = [];
-  let currentRow = -1;
-  let lastListMarkerX: number | null = null;
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const text = row.segments.join(" ").replace(/\s+/g, " ").trim();
-
-    const gap = currentRow === -1 ? Infinity : row.y0 - rows[currentRow].y0;
-    let isNewParagraph = false;
-    if (currentRow !== -1) {
-      if (dominantPitch > 0) {
-        isNewParagraph = gap > dominantPitch * 1.3;
-      } else {
-        isNewParagraph = gap > 1.6 * lineHeight;
-      }
-    }
-
-    const firstToken = text.split(/\s+/)[0]?.replace(/^[("']+/, "") ?? "";
-    if (LIST_MARKER_RE.test(firstToken)) {
-      if (lastListMarkerX !== null && Math.abs(row.x0 - lastListMarkerX) <= 8) {
-        isNewParagraph = true;
-      }
-      lastListMarkerX = row.x0;
-    }
-
-    if (currentRow === -1 || isNewParagraph) {
-      if (text) paragraphs.push(text);
-    } else if (text) {
-      paragraphs[paragraphs.length - 1] += ` ${text}`;
-    }
-    currentRow = i;
-  }
-
-  return paragraphs.map((p) => p.trim()).filter(Boolean);
-}
-
-  /**
- * OCR a single scanned page: render to canvas at a bounded resolution, detect
- * the page orientation with OSD, auto-rotate the canvas (trying the detected
- * direction first and the opposite/0 candidates only when the recognized text
- * is still too sparse), and group the recognized lines into layout-aware
- * paragraphs via groupOcrLinesIntoParagraphs.
- */
+/** Recognize a scanned page and preserve its measured layout. */
 async function ocrPageToBlocks(
   page: import("pdfjs-dist").PDFPageProxy,
   pageNumber: number,
@@ -319,7 +162,7 @@ async function ocrPageToBlocks(
     subProgress?: number,
   ) => void) | undefined,
   signal?: AbortSignal,
-): Promise<OcrPageBlock[]> {
+): Promise<WordPage> {
   // Adaptive render scale: aim for ~3000px on the long edge so dense scans
   // keep enough detail, clamped so small pages aren't over-scaled and huge
   // pages stay within bounded canvas memory.
@@ -335,6 +178,7 @@ async function ocrPageToBlocks(
 
   type OcrCandidate = {
     deg: number;
+    image: HTMLCanvasElement;
     recognition: OcrRecognition;
     words: number;
   };
@@ -362,7 +206,7 @@ async function ocrPageToBlocks(
       if (deg !== 0) rotatedCanvases.push(image);
       const recognition = await engine.recognize(image);
       assertNotAborted(signal);
-      return { deg, recognition, words: ocrAlphaWords(recognition) };
+      return { deg, image, recognition, words: ocrAlphaWords(recognition) };
     };
     const keepBetter = (best: OcrCandidate | null, cand: OcrCandidate) =>
       !best || cand.words > best.words ? cand : best;
@@ -398,13 +242,23 @@ async function ocrPageToBlocks(
     // lines. Detection is deliberately conservative: anything ambiguous
     // stays prose.
     const recognition = chosen.recognition;
-    const ocrLines: OcrLineBox[] = recognition.lines.map((line, idx) => ({
-      text: line.text,
-      y0: line.y0,
-      y1: line.y1,
-      words: recognition.lineWords[idx] ?? [],
-    }));
-    return partitionOcrLinesIntoBlocks(ocrLines);
+    const image=chosen.image;
+    const swap=chosen.deg===90||chosen.deg===270;
+    const pixelWidth=swap?canvas.height:canvas.width,pixelHeight=swap?canvas.width:canvas.height;
+    const band=decorativeBand(recognition.layout,pixelWidth,pixelHeight);
+    const wordPage=buildOcrWordPage(recognition.layout.filter(l=>!band||l.y0>band),pixelWidth,pixelHeight,swap?baseViewport.height:baseViewport.width,swap?baseViewport.width:baseViewport.height);
+    if(band) {
+      const crop=document.createElement('canvas');crop.width=pixelWidth;crop.height=Math.ceil(band);
+      try {
+        crop.getContext('2d')!.drawImage(image,0,0);
+        const blob=await new Promise<Blob>((resolve,reject)=>crop.toBlob(b=>b?resolve(b):reject(new Error('Could not preserve masthead')),'image/png'));
+        wordPage.blocks.unshift({kind:'image',x:0,right:wordPage.width,y:0,bottom:band/pixelHeight*wordPage.height,data:new Uint8Array(await blob.arrayBuffer())});
+        wordPage.left=0;wordPage.right=wordPage.width;wordPage.top=0;
+      } finally {crop.width=0;crop.height=0;}
+    }
+    const context=image.getContext('2d')!;
+    fitOcrText(wordPage,(text,size,bold)=>{context.font=`${bold?'bold ':''}${size}px Arial`;return context.measureText(text).width;});
+    return wordPage;
   } catch (caught) {
     if (caught instanceof PdfProcessingError) throw caught;
     throw new PdfProcessingError(
@@ -479,7 +333,7 @@ export async function convertPdfToWord(
           if (!ocrEngine) {
             ocrEngine = await createOcrEngine(onProgress, i + 1, pageCount);
           }
-          const ocrBlocks = await ocrPageToBlocks(
+          const ocrPage = await ocrPageToBlocks(
             page,
             i + 1,
             pageCount,
@@ -487,37 +341,7 @@ export async function convertPdfToWord(
             onProgress,
             signal,
           );
-          // OCR keeps its established top-down detection and confidence gates.
-          // Convert recognized blocks to the shared page model without flipping Y.
-          const viewport = page.getViewport({scale:1});
-          let y = 84;
-          const ocrPage: WordPage = {width:viewport.width,height:viewport.height,left:72,right:viewport.width-72,top:72,blocks:[]};
-          for (const block of ocrBlocks) {
-            if (block.kind === "table") {
-              const source = block.table;
-              const left = source.columnXs[0];
-              const scale = (viewport.width - 144) / Math.max(1,source.tableRight-left);
-              const edges = [...source.columnXs,source.tableRight].map(x=>72+(x-left)*scale);
-              const rows = source.rows.map(cells=>cells.map((text,c)=>[{
-                x:edges[c]+3,right:edges[c+1]-3,y,size:11,
-                spans:[{text,x:edges[c]+3,y,width:edges[c+1]-edges[c]-6,size:11,font:"Arial",bold:false,italic:false}],
-              }]));
-              ocrPage.blocks.push({kind:"table",x:72,right:viewport.width-72,y:y-11,bottom:y+rows.length*16,edges,rows,rowHeights:rows.map(()=>16),ruled:true});
-              y+=rows.length*16+16;
-              totalTextLength+=source.rows.flat().join("").length;
-            } else {
-              const proseLines=block.lines.map(l=>({text:l.text,x0:0,y0:l.y0,x1:0,y1:l.y1}));
-              for(const text of groupOcrLinesIntoParagraphs(proseLines)) {
-                const span:WordSpan={text,x:72,y,width:viewport.width-144,size:11,font:"Arial",bold:false,italic:false};
-                // Keep OCR's established paragraph grouping; synthetic widths
-                // must not be used to infer headings, signatures, or new tables.
-                ocrPage.blocks.push({kind:"paragraph",alignment:"left",x:72,right:viewport.width-72,
-                  y:y-11,bottom:y,firstIndent:0,pitch:13.2,
-                  lines:[{x:72,right:viewport.width-72,y,size:11,spans:[span]}]});
-                totalTextLength+=text.length;y+=16;
-              }
-            }
-          }
+          totalTextLength+=ocrPage.blocks.reduce((n,b)=>n+(b.kind==='image'?0:b.kind==='table'?b.rows.flat(2).flatMap(l=>l.spans).reduce((a,s)=>a+s.text.length,0):b.lines.flatMap(l=>l.spans).reduce((a,s)=>a+s.text.length,0)),0);
           pages.push(ocrPage);
         } else {
           const wordPage = await extractWordPage(page,textContent);
@@ -536,6 +360,7 @@ export async function convertPdfToWord(
       );
     }
 
+    finalizeOcrPages(pages);
     const doc = createWordDocument(pages);
     const blob = await Packer.toBlob(doc);
     if (blob.size > MAX_PDF_TO_WORD_OUTPUT_SIZE) {
