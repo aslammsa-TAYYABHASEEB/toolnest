@@ -1,5 +1,6 @@
 ﻿import { PdfProcessingError } from "@/lib/pdf/errors";
 import { loadPdfRendererDocument } from "@/lib/pdf/renderer";
+import { createBrowserOcrWorker } from "@/lib/ocr/worker";
 import {
   renderPageToCanvasForOcr,
   rotateCanvas,
@@ -88,8 +89,6 @@ async function createOcrEngine(
   pageCount: number,
 ): Promise<OcrEngine> {
   onProgress?.(pageNumber, pageCount, "ocr-download");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tesseract = (await import("tesseract.js")) as any;
   const logger = (message: OcrLoggerMessage) => {
     if (typeof message.progress !== "number") return;
     if (
@@ -106,16 +105,10 @@ async function createOcrEngine(
   // Orientation detection relies on Tesseract's OSD, which is only available on
   // the legacy (non-LSTM) engine, so it gets its own dedicated worker that
   // loads the OSD traineddata once per conversion.
-  const workerOptions = {
-    workerPath: "/tesseract/worker.min.js",
-    corePath: "/tesseract/core",
-    logger,
-  };
-  const recWorker = await tesseract.createWorker("eng", 1, workerOptions);
-  const osdWorker = await tesseract.createWorker("osd", 0, {
-    ...workerOptions,
-    legacyCore: true,
-  });
+  const recWorker = await createBrowserOcrWorker("eng", logger);
+  let osdWorker;
+  try { osdWorker = await createBrowserOcrWorker("osd", logger); }
+  catch (error) { await recWorker.terminate(); throw error; }
   return {
     async detect(image) {
       const result = await osdWorker.detect(image);

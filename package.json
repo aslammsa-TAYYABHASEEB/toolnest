@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test:pdf-to-word": "node scripts/test-pdf-to-word.cjs && node scripts/test-ocr-word.cjs",
     "test:organize-pdf": "node scripts/test-organize-pdf.cjs",
+    "test:image-ocr": "node scripts/test-image-ocr.cjs",
     "qa:pdf-to-word": "node scripts/pdf-word-qa.cjs",
     "indexnow:submit": "node scripts/submit-indexnow.mjs",
     "postinstall": "node scripts/copy-pdf-assets.js"
