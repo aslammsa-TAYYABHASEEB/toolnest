@@ -81,6 +81,7 @@ export const categories: Category[] = [
 ];
 
 export const tools: Tool[] = [
+  { name: "Organize PDF", description: "Visually reorder, delete, rotate, duplicate, extract, and insert PDF pages privately.", category: "pdf-tools", icon: "▦", available: true, href: "/tools/organize-pdf", keywords: ["organize pdf", "reorder pdf", "delete pdf pages", "move pdf pages", "insert pdf pages", "duplicate pdf page", "extract pdf pages"], relatedHrefs: ["/tools/pdf-merge", "/tools/pdf-split", "/tools/pdf-rotate"] },
   { name: "PDF Merge", description: "Combine multiple PDF files privately in the order you choose.", category: "pdf-tools", icon: "M", popular: true, available: true, href: "/tools/pdf-merge", keywords: ["merge pdf", "combine pdf files", "join pdf"], relatedHrefs: ["/tools/pdf-split", "/tools/pdf-compress", "/tools/pdf-page-numbers"] },
   { name: "PDF Split", description: "Extract pages or divide a PDF into private browser downloads.", category: "pdf-tools", icon: "S", popular: true, available: true, href: "/tools/pdf-split", keywords: ["split pdf", "extract pdf pages", "separate pdf pages"], relatedHrefs: ["/tools/pdf-merge", "/tools/pdf-rotate", "/tools/pdf-page-numbers"] },
   { name: "JPG to PDF", description: "Turn ordered JPG, PNG, and WebP images into one private PDF.", category: "pdf-tools", icon: "J", popular: true, available: true, href: "/tools/jpg-to-pdf", keywords: ["jpg to pdf", "image to pdf", "png to pdf"], relatedHrefs: ["/tools/image-converter", "/tools/pdf-merge", "/tools/pdf-compress"] },

@@ -8,6 +8,7 @@ export type PdfProcessingErrorCode =
   | "total-too-large"
   | "not-enough-files"
   | "merge-failed"
+  | "organize-failed"
   | "empty-document"
   | "too-many-source-pages"
   | "invalid-page-selection"

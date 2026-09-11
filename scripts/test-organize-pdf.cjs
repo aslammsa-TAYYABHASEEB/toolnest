@@ -1,0 +1,85 @@
+require('./pdf-word-loader.cjs');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const Module = require('node:module');
+const originalResolve = Module._resolveFilename;
+Module._resolveFilename = function(id, ...args) { return originalResolve.call(this, id.startsWith('@/') ? path.resolve(id.slice(2)) : id, ...args); };
+const { PDFDocument, StandardFonts, degrees, rgb } = require('pdf-lib');
+const organizer = require('../lib/pdf/organize.ts');
+const { mergePdfFiles } = require('../lib/pdf/merge.ts');
+const { splitPdfFile } = require('../lib/pdf/split.ts');
+const { rotatePdfFile } = require('../lib/pdf/rotation.ts');
+const { applyPdfWatermark } = require('../lib/pdf/watermark.ts');
+const { applyPdfPageNumbers } = require('../lib/pdf/page-numbers.ts');
+const out = path.resolve('work/organize-qa');
+let serial = 0; const id = () => `page-${++serial}`;
+async function fixture(name, count) {
+  const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica);
+  for (let i=0;i<count;i++) {
+    const p=pdf.addPage(i%2 ? [720,420] : [420,620]);
+    p.drawRectangle({ x:20,y:20,width:150,height:100,color:rgb(.85,.94,.98),borderColor:rgb(.1,.4,.6),borderWidth:2 });
+    p.drawText(`${name} PAGE ${i+1}`,{x:40,y:200,size:26,font});
+    if(i===1)p.setRotation(degrees(90));
+    if(i===4)p.setCropBox(10,10,400,590);
+  }
+  const bytes=await pdf.save();fs.writeFileSync(path.join(out,`${name}.pdf`),bytes);
+  return new File([bytes],`${name}.pdf`,{type:'application/pdf'});
+}
+(async()=>{
+  fs.mkdirSync(out,{recursive:true});
+  const a=await fixture('ORGANIZER-A',5),b=await fixture('ORGANIZER-B',2);
+  const sa=await organizer.prepareOrganizerSource(a,'a'),sb=await organizer.prepareOrganizerSource(b,'b',[sa]);
+  const original=organizer.sourceOrganizerPages(sa,id);
+  let pages=organizer.moveOrganizerPage(original,original[0].id,4);
+  pages=organizer.changeOrganizerPages(pages,new Set([original[2].id]),'delete',id);
+  pages=organizer.changeOrganizerPages(pages,new Set([original[1].id]),'clockwise',id);
+  pages=organizer.changeOrganizerPages(pages,new Set([original[1].id]),'duplicate',id);
+  const duplicate=pages[1];
+  pages=organizer.changeOrganizerPages(pages,new Set([duplicate.id]),'counterclockwise',id);
+  const added=organizer.sourceOrganizerPages(sb,id);
+  pages=organizer.insertOrganizerPages(pages,added,new Set([original[4].id]),'before');
+  const result=await organizer.exportOrganizedPdf([sa,sb],pages);
+  fs.writeFileSync(path.join(out,'organized.pdf'),new Uint8Array(await result.blob.arrayBuffer()));
+  assert.equal(result.pageCount,7);
+  const doc=await PDFDocument.load(await result.blob.arrayBuffer());
+  assert.deepEqual(doc.getPages().map(p=>p.getRotation().angle),[180,90,0,0,90,0,0]);
+  assert.deepEqual(doc.getPage(5).getCropBox(),{x:10,y:10,width:400,height:590});
+  assert.deepEqual(doc.getPages().map(p=>[p.getWidth(),p.getHeight()]),[[720,420],[720,420],[720,420],[420,620],[720,420],[420,620],[420,620]]);
+  const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const read=await pdfjs.getDocument({data:new Uint8Array(await result.blob.arrayBuffer()),useSystemFonts:true}).promise;
+  const labels=[];
+  for(let i=1;i<=read.numPages;i++){
+    const p=await read.getPage(i),text=await p.getTextContent(),ops=await p.getOperatorList();
+    labels.push(text.items.map(t=>t.str).join(''));
+    assert.ok(ops.fnArray.includes(pdfjs.OPS.constructPath));
+    assert.ok(!ops.fnArray.includes(pdfjs.OPS.paintImageXObject));
+  }
+  await read.destroy();
+  assert.deepEqual(labels,['ORGANIZER-A PAGE 2','ORGANIZER-A PAGE 2','ORGANIZER-A PAGE 4','ORGANIZER-B PAGE 1','ORGANIZER-B PAGE 2','ORGANIZER-A PAGE 5','ORGANIZER-A PAGE 1']);
+  const extracted=await organizer.exportOrganizedPdf([sa,sb],pages.filter(p=>[duplicate.id,added[1].id,original[0].id].includes(p.id)),true);
+  fs.writeFileSync(path.join(out,'extracted.pdf'),new Uint8Array(await extracted.blob.arrayBuffer()));
+  assert.equal(extracted.pageCount,3);assert.match(extracted.filename,/-extracted.pdf$/);
+  assert.deepEqual(original.map(p=>p.pageIndex),[0,1,2,3,4]);assert.ok(original.every(p=>p.rotation===0));
+  assert.equal(organizer.insertOrganizerPages(original,added,new Set(),'before').at(-1).sourceId,'b');
+  assert.equal(organizer.insertOrganizerPages(original,added,new Set([original[1].id]),'after')[2].sourceId,'b');
+  assert.throws(()=>organizer.assertOrganizerCount(501));
+  await assert.rejects(()=>organizer.exportOrganizedPdf([sa],[]));
+  await assert.rejects(()=>organizer.exportOrganizedPdf([sa],[{...original[0],pageIndex:99}]));
+  await assert.rejects(()=>organizer.prepareOrganizerSource(new File(['no'],'not.txt'),'bad'));
+  await assert.rejects(()=>organizer.prepareOrganizerSource(new File(['%PDF-1.7 broken'],'broken.pdf'),'bad'));
+  await assert.rejects(()=>organizer.prepareOrganizerSource(new File([],'empty.pdf'),'bad'));
+  const empty=await PDFDocument.create();
+  await assert.rejects(async()=>organizer.prepareOrganizerSource(new File([await empty.save({addDefaultPage:false})],'zero.pdf'),'zero'));
+  const encrypted=await PDFDocument.create();encrypted.addPage();encrypted.context.trailerInfo.Encrypt=encrypted.context.register(encrypted.context.obj({Filter:'Standard'}));
+  const encryptedFile=new File([await encrypted.save()],'encrypted.pdf');
+  await assert.rejects(()=>organizer.prepareOrganizerSource(encryptedFile,'encrypted'),e=>e.code==='encrypted-pdf');
+  assert.equal((await mergePdfFiles({files:[sa,sb]})).pageCount,7);
+  assert.equal((await splitPdfFile(a,'extract',[{pages:[2,4],filenameLabel:'2-4',summary:'test'}])).pageCount,2);
+  assert.equal((await rotatePdfFile(sa,{1:90})).pageCount,5);
+  assert.equal((await applyPdfWatermark(sa,{text:'QA',fontSize:20,opacity:.3,angle:45,position:'center',pages:[1]})).pageCount,5);
+  assert.equal((await applyPdfPageNumbers(sa,{position:'bottom-center',startingNumber:1,pages:[1,2,3,4,5],fontSize:12,margin:'medium',format:'number',prefix:'',suffix:''})).pageCount,5);
+  const {tools}=require('../lib/site.ts');const tool=tools.find(t=>t.href==='/tools/organize-pdf');assert.ok(tool?.available);assert.ok(tool.keywords.includes('insert pdf pages'));
+  console.log('PASS: order, deletion, independent duplicates/rotations, sizes/crop boxes, vector/text retention, insertion modes, extraction, immutable reset state, limits/errors, registry and Merge/Split/Rotate/Watermark/Page Numbers smoke checks.');
+  console.log(JSON.stringify({output:path.join(out,'organized.pdf'),pageCount:doc.getPageCount(),labels}));
+})().catch(e=>{console.error(e);process.exitCode=1;});

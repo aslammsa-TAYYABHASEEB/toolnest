@@ -25,7 +25,7 @@ function thumbnailBlob(canvas: HTMLCanvasElement) {
   });
 }
 
-export async function renderPdfRotationThumbnails(file: File) {
+export async function renderPdfRotationThumbnails(file: File, requestedPages?: number[]) {
   const documentProxy = await loadPdfRendererDocument(file);
   const thumbnails: PdfThumbnail[] = [];
   try {
@@ -41,7 +41,11 @@ export async function renderPdfRotationThumbnails(file: File) {
     );
     let totalPixels = 0;
 
-    for (let pageNumber = 1; pageNumber <= previewCount; pageNumber += 1) {
+    const pages = requestedPages ?? Array.from({ length: previewCount }, (_, i) => i + 1);
+    if (pages.length > MAX_PDF_ROTATE_THUMBNAILS || pages.some(p => !Number.isInteger(p) || p < 1 || p > documentProxy.numPages)) {
+      throw new PdfProcessingError("invalid-page-selection", "Choose a valid, bounded set of page previews.");
+    }
+    for (const pageNumber of pages) {
       const page = await documentProxy.getPage(pageNumber);
       try {
         const natural = page.getViewport({ scale: 1 });

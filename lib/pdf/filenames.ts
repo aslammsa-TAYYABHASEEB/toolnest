@@ -2,6 +2,10 @@ export function makeMergedPdfFilename() {
   return "merged-document.pdf";
 }
 
+export function makeOrganizedPdfFilename(sourceFilename: string, selectedOnly = false) {
+  return `${cleanPdfBaseName(sourceFilename)}-${selectedOnly ? "extracted" : "organized"}.pdf`;
+}
+
 function cleanPdfBaseName(filename: string) {
   const withoutExtension = filename.replace(/\.pdf$/i, "");
   const cleaned = withoutExtension
