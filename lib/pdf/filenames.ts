@@ -82,3 +82,12 @@ export function makePageNumberedPdfFilename(sourceFilename: string) {
 export function makeWordFilename(sourceFilename: string) {
   return `${cleanPdfBaseName(sourceFilename)}.docx`;
 }
+
+export function makeExcelFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}-tables.xlsx`;
+}
+
+export function makeTableCsvFilename(sourceFilename: string, tableName: string) {
+  const table = tableName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "table";
+  return `${cleanPdfBaseName(sourceFilename)}-${table}.csv`;
+}
