@@ -159,7 +159,13 @@ export async function recognizePdfPage(
   ) => void) | undefined,
   signal?: AbortSignal,
   includeDecorativeText = false,
-): Promise<{ page: WordPage; rotation: 0 | 90 | 180 | 270 }> {
+): Promise<{
+  page: WordPage;
+  rotation: 0 | 90 | 180 | 270;
+  ocrLines: OcrLayoutLine[];
+  ocrPixelWidth: number;
+  ocrPixelHeight: number;
+}> {
   engine.setProgressPage(pageNumber, pageCount);
   // Adaptive render scale: aim for ~3000px on the long edge so dense scans
   // keep enough detail, clamped so small pages aren't over-scaled and huge
@@ -244,7 +250,8 @@ export async function recognizePdfPage(
     const swap=chosen.deg===90||chosen.deg===270;
     const pixelWidth=swap?canvas.height:canvas.width,pixelHeight=swap?canvas.width:canvas.height;
     const band=includeDecorativeText?undefined:decorativeBand(recognition.layout,pixelWidth,pixelHeight);
-    const wordPage=buildOcrWordPage(recognition.layout.filter(l=>!band||l.y0>band),pixelWidth,pixelHeight,swap?baseViewport.height:baseViewport.width,swap?baseViewport.width:baseViewport.height);
+    const ocrLines=recognition.layout.filter(l=>!band||l.y0>band);
+    const wordPage=buildOcrWordPage(ocrLines,pixelWidth,pixelHeight,swap?baseViewport.height:baseViewport.width,swap?baseViewport.width:baseViewport.height);
     if(band) {
       const crop=document.createElement('canvas');crop.width=pixelWidth;crop.height=Math.ceil(band);
       try {
@@ -256,7 +263,13 @@ export async function recognizePdfPage(
     }
     const context=image.getContext('2d')!;
     fitOcrText(wordPage,(text,size,bold)=>{context.font=`${bold?'bold ':''}${size}px Arial`;return context.measureText(text).width;});
-    return { page: wordPage, rotation: chosen.deg as 0 | 90 | 180 | 270 };
+    return {
+      page: wordPage,
+      rotation: chosen.deg as 0 | 90 | 180 | 270,
+      ocrLines,
+      ocrPixelWidth: pixelWidth,
+      ocrPixelHeight: pixelHeight,
+    };
   } catch (caught) {
     if (caught instanceof PdfProcessingError) throw caught;
     throw new PdfProcessingError(

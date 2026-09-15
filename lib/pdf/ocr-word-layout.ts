@@ -5,7 +5,7 @@ import {partitionOcrLinesIntoBlocks} from './table-detection';
 export interface OcrLayoutLine {
   text:string; x0:number; y0:number; x1:number; y1:number;
   confidence:number; height:number;
-  words:{text:string;x0:number;x1:number;confidence:number}[];
+  words:{text:string;x0:number;y0:number;x1:number;y1:number;confidence:number}[];
 }
 
 /** Retain geometry; LSTM does not supply trustworthy bold/italic font flags. */
@@ -13,7 +13,7 @@ export function recognitionLines(data:Pick<TesseractPage,'blocks'>):OcrLayoutLin
   return (data.blocks??[]).flatMap(b=>b.paragraphs.flatMap(p=>p.lines.map(l=>({
     text:l.text.replace(/\s+/g,' ').trim(),...l.bbox,confidence:l.confidence,
     height:l.rowAttributes?.rowHeight || l.bbox.y1-l.bbox.y0,
-    words:l.words.map(w=>({text:w.text.trim(),x0:w.bbox.x0,x1:w.bbox.x1,confidence:w.confidence})),
+    words:l.words.map(w=>({text:w.text.trim(),...w.bbox,confidence:w.confidence})),
   })))).filter(l=>l.text && Number.isFinite(l.x0+l.x1+l.y0+l.y1) && l.x1>l.x0 && l.y1>l.y0)
     .sort((a,b)=>a.y0-b.y0 || a.x0-b.x0);
 }
