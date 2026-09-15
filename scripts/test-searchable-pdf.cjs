@@ -23,6 +23,7 @@ function scanImage(label, lines, rotate=0){
 async function scannedPdf(images){const pdf=await PDFDocument.create();for(const image of images){const png=await pdf.embedPng(image.toBuffer('image/png')),page=pdf.addPage([550,380]);page.drawImage(png,{x:0,y:0,width:550,height:380});}return pdf.save();}
 async function nativePdf(){const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);for(let i=0;i<2;i++){const page=pdf.addPage([550,380]);page.drawRectangle({x:35,y:40,width:480,height:285,borderColor:rgb(.1,.35,.7),borderWidth:2});page.drawText(`NATIVE SEARCHABLE PAGE ${i+1}`,{x:65,y:260,size:24,font});page.drawText('This selectable vector text must remain intact.',{x:65,y:205,size:15,font});if(i===1)page.setRotation(degrees(90));}return pdf.save();}
 async function mixedPdf(nativeBytes,scan){const native=await PDFDocument.load(nativeBytes),pdf=await PDFDocument.create();const [copy]=await pdf.copyPages(native,[0]);pdf.addPage(copy);const png=await pdf.embedPng(scan.toBuffer('image/png')),page=pdf.addPage([550,380]);page.drawImage(png,{x:0,y:0,width:550,height:380});return pdf.save();}
+async function sparseWatermarkPdf(){const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);for(let i=1;i<=4;i++){const image=scanImage(`SCANNED BODY PAGE ${i}`,[`Unique searchable sentence ${i}`,'Sparse source text must not duplicate','Body OCR remains available.']),context=image.getContext('2d');context.fillStyle='#333';context.font='40px Arial';context.fillText('CamScanner',800,700);const png=await pdf.embedPng(image.toBuffer('image/png')),page=pdf.addPage([550,380]);page.drawImage(png,{x:0,y:0,width:550,height:380});page.drawText('CamScanner',{x:400,y:30,size:20,font,opacity:.0001});}return pdf.save();}
 
 async function openPdf(pdfjs,bytes){return pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useWorkerFetch:false}).promise;}
 async function recognizePage(worker,page,candidates=[0]){
@@ -35,7 +36,7 @@ async function recognizePage(worker,page,candidates=[0]){
 }
 async function makeOutput(pdfjs,worker,bytes,rotationCandidates={}){
   const doc=await openPdf(pdfjs,bytes),layers=new Map(),preserved=[];
-  try{for(let number=1;number<=doc.numPages;number++){const page=await doc.getPage(number);try{const text=await page.getTextContent();if(searchable.hasUsablePdfText(text)){preserved.push(number);continue;}const placements=await recognizePage(worker,page,rotationCandidates[number]||[0]);layers.set(number,placements);}finally{page.cleanup();}}}finally{await doc.destroy();}
+  try{for(let number=1;number<=doc.numPages;number++){const page=await doc.getPage(number);try{const text=await page.getTextContent();if(searchable.hasUsablePdfText(text)){preserved.push(number);continue;}const placements=searchable.removeExistingTextDuplicates(await recognizePage(worker,page,rotationCandidates[number]||[0]),searchable.sourceTextPlacements(text));layers.set(number,placements);}finally{page.cleanup();}}}finally{await doc.destroy();}
   return {bytes:layers.size?await searchable.addSearchableTextLayers(new Uint8Array(bytes),layers):new Uint8Array(bytes),layers,preserved};
 }
 async function pageText(pdfjs,bytes){const doc=await openPdf(pdfjs,bytes),texts=[];try{for(let i=1;i<=doc.numPages;i++){const page=await doc.getPage(i);try{texts.push((await page.getTextContent()).items.map(item=>item.str).join(' '));}finally{page.cleanup();}}return texts;}finally{await doc.destroy();}}
@@ -48,20 +49,23 @@ function meanPixelDifference(a,b){assert.equal(a.length,b.length);let total=0;fo
   const second=scanImage('SECOND SCANNED PAGE',['Quarterly document archive','The original image stays visible','English OCR quality check.']);
   const mixedScan=scanImage('MIXED SCAN PAGE',['Native page one stays untouched','Only this page receives OCR','Local browser processing.']);
   const rotatedScan=scanImage('ROTATED SCAN',['Orientation must be corrected','Searchable text follows the page','Visual pixels stay unchanged.'],90);
-  const sources={scanned:await scannedPdf([first,second]),native:await nativePdf(),mixed:null,rotated:await scannedPdf([rotatedScan])};sources.mixed=await mixedPdf(sources.native,mixedScan);
+  const sources={scanned:await scannedPdf([first,second]),native:await nativePdf(),mixed:null,rotated:await scannedPdf([rotatedScan]),sparse:await sparseWatermarkPdf()};sources.mixed=await mixedPdf(sources.native,mixedScan);
   Object.entries(sources).forEach(([name,bytes])=>fs.writeFileSync(path.join(output,`${name}-source.pdf`),bytes));
   const worker=await tesseract.createWorker('eng',1,{cachePath:path.resolve('work/image-ocr-qa')});
   try{
-    const scanned=await makeOutput(pdfjs,worker,sources.scanned),native=await makeOutput(pdfjs,worker,sources.native),mixed=await makeOutput(pdfjs,worker,sources.mixed),rotated=await makeOutput(pdfjs,worker,sources.rotated,{1:[0,270]});
-    const results={scanned,native,mixed,rotated};for(const [name,result] of Object.entries(results))fs.writeFileSync(path.join(output,`${name}-searchable.pdf`),result.bytes);
+    const scanned=await makeOutput(pdfjs,worker,sources.scanned),native=await makeOutput(pdfjs,worker,sources.native),mixed=await makeOutput(pdfjs,worker,sources.mixed),rotated=await makeOutput(pdfjs,worker,sources.rotated,{1:[0,270]}),sparse=await makeOutput(pdfjs,worker,sources.sparse);
+    const results={scanned,native,mixed,rotated,sparse};for(const [name,result] of Object.entries(results))fs.writeFileSync(path.join(output,`${name}-searchable.pdf`),result.bytes);
     assert.equal(scanned.layers.size,2);assert.deepEqual(native.preserved,[1,2]);assert.equal(native.layers.size,0);assert.deepEqual(native.bytes,new Uint8Array(sources.native));assert.deepEqual(mixed.preserved,[1]);assert.equal(mixed.layers.size,1);assert.equal(rotated.layers.size,1);
     assert.ok(Math.abs([...scanned.layers.values()][0][0].angle)<1);assert.ok(Math.abs(Math.abs([...rotated.layers.values()][0][0].angle)-90)<1);
     const scannedText=await pageText(pdfjs,scanned.bytes),mixedText=await pageText(pdfjs,mixed.bytes),rotatedText=await pageText(pdfjs,rotated.bytes);
-    assert.match(scannedText[0],/SCANNED REPORT/i);assert.match(scannedText[1],/SECOND SCANNED PAGE/i);assert.match(mixedText[0],/NATIVE SEARCHABLE PAGE 1/i);assert.match(mixedText[1],/MIXED SCAN PAGE/i);assert.match(rotatedText[0],/ROTATED SCAN/i);
+    const normalizedText=value=>value.replace(/\s+/g,' ').trim();
+    assert.match(normalizedText(scannedText[0]),/SCANNED REPORT/i);assert.match(normalizedText(scannedText[1]),/SECOND SCANNED PAGE/i);assert.match(normalizedText(mixedText[0]),/NATIVE SEARCHABLE PAGE 1/i);assert.match(normalizedText(mixedText[1]),/MIXED SCAN PAGE/i);assert.match(normalizedText(rotatedText[0]),/ROTATED SCAN/i);
     const sourcePixels=await renderPixels(pdfjs,sources.scanned,1),outputPixels=await renderPixels(pdfjs,scanned.bytes,1);assert.ok(meanPixelDifference(sourcePixels,outputPixels)<.01,'Invisible layer changed visible pixels');
     const sourceRotatedPixels=await renderPixels(pdfjs,sources.rotated,1),outputRotatedPixels=await renderPixels(pdfjs,rotated.bytes,1);assert.ok(meanPixelDifference(sourceRotatedPixels,outputRotatedPixels)<.01,'Rotated output changed visible pixels');
+    const sparseSourceText=await pageText(pdfjs,sources.sparse),sparseOutputText=await pageText(pdfjs,sparse.bytes),occurrences=values=>(values.join(' ').match(/CamScanner/gi)||[]).length;assert.equal(occurrences(sparseSourceText),4);assert.equal(occurrences(sparseOutputText),4);assert.equal(sparse.layers.size,4);sparseOutputText.forEach((text,index)=>assert.match(normalizedText(text),new RegExp(`Unique searchable sentence ${index+1}`,'i')));
+    const sparseSourcePixels=await renderPixels(pdfjs,sources.sparse,1),sparseOutputPixels=await renderPixels(pdfjs,sparse.bytes,1);assert.ok(meanPixelDifference(sparseSourcePixels,sparseOutputPixels)<.01,'Sparse hidden-text output changed visible pixels');
     for(const name of Object.keys(results)){const originalDoc=await PDFDocument.load(sources[name]),outputDoc=await PDFDocument.load(results[name].bytes);assert.deepEqual(outputDoc.getPages().map(page=>[page.getWidth(),page.getHeight(),page.getRotation().angle]),originalDoc.getPages().map(page=>[page.getWidth(),page.getHeight(),page.getRotation().angle]));}
-    console.log('PASS: fully scanned multi-page, native preservation/no OCR, mixed PDF, rotated scan, searchable text, dimensions/rotation, and pixel-identical visible output.');
-    console.log(JSON.stringify({output,scannedText,mixedText,rotatedText,meanPixelDifference:meanPixelDifference(sourcePixels,outputPixels)}));
+    console.log('PASS: fully scanned multi-page, native preservation/no OCR, mixed PDF, rotated scan, sparse hidden-text deduplication, searchable body text, dimensions/rotation, and pixel-identical visible output.');
+    console.log(JSON.stringify({output,scannedText,mixedText,rotatedText,sparseOccurrences:occurrences(sparseOutputText),meanPixelDifference:meanPixelDifference(sourcePixels,outputPixels)}));
   }finally{await worker.terminate();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

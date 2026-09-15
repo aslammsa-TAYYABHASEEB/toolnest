@@ -35,11 +35,33 @@ type PdfViewport = {
   convertToPdfPoint(x: number, y: number): number[];
 };
 
-export function hasUsablePdfText(textContent: { items: Array<unknown> }) {
+type PdfTextContent = {
+  items: Array<unknown>;
+};
+
+export function hasUsablePdfText(textContent: PdfTextContent) {
   return textContent.items.reduce<number>((count, item) => {
     if (!item || typeof item !== "object" || !("str" in item)) return count;
     return count + String(item.str ?? "").replace(/\s/g, "").length;
   }, 0) >= SEARCHABLE_PDF_MIN_TEXT_CHARS;
+}
+
+function splitPlacementWords(placement: SearchableTextPlacement) {
+  const matches = Array.from(placement.text.matchAll(/\S+/g));
+  if (matches.length <= 1) return [{ ...placement, text: placement.text.trim() }];
+  const radians = placement.angle * Math.PI / 180;
+  return matches.map((match) => {
+    const start = (match.index ?? 0) / placement.text.length;
+    const length = match[0].length / placement.text.length;
+    const offset = placement.width * start;
+    return {
+      ...placement,
+      text: match[0],
+      x: placement.x + Math.cos(radians) * offset,
+      y: placement.y + Math.sin(radians) * offset,
+      width: placement.width * length,
+    };
+  });
 }
 
 function spansFromWordPage(page: WordPage): WordSpan[] {
@@ -70,22 +92,77 @@ export function searchablePlacements(
   ocrRotation: 0 | 90 | 180 | 270,
   viewport: PdfViewport,
 ): SearchableTextPlacement[] {
-  return spansFromWordPage(wordPage).map((span) => {
+  return spansFromWordPage(wordPage).flatMap((span) => {
     const start = inverseRotatedPoint(span.x, span.y, ocrRotation, viewport.width, viewport.height);
     const end = inverseRotatedPoint(span.x + span.width, span.y, ocrRotation, viewport.width, viewport.height);
     const top = inverseRotatedPoint(span.x, span.y - span.size, ocrRotation, viewport.width, viewport.height);
     const [x, y] = viewport.convertToPdfPoint(...start);
     const [endX, endY] = viewport.convertToPdfPoint(...end);
     const [topX, topY] = viewport.convertToPdfPoint(...top);
-    return {
+    return splitPlacementWords({
       text: span.text,
       x,
       y,
       angle: Math.atan2(endY - y, endX - x) * 180 / Math.PI,
       width: Math.hypot(endX - x, endY - y),
       height: Math.hypot(topX - x, topY - y),
-    };
+    });
   }).filter((placement) => placement.width > 1 && placement.height > 1);
+}
+
+/** Read even a sparse source text layer so OCR can fill the page without
+ * adding a second searchable copy of an existing watermark or hidden word. */
+export function sourceTextPlacements(textContent: PdfTextContent): SearchableTextPlacement[] {
+  return textContent.items.flatMap((item) => {
+    if (!item || typeof item !== "object" || !("str" in item) || !("transform" in item)) return [];
+    const record = item as { str?: unknown; width?: unknown; height?: unknown; transform?: unknown };
+    if (typeof record.str !== "string" || !record.str.trim() || !Array.isArray(record.transform) || record.transform.length < 6) return [];
+    const transform = record.transform.map(Number);
+    if (!transform.every(Number.isFinite)) return [];
+    const width = Math.abs(Number(record.width));
+    const height = Math.max(Math.abs(Number(record.height)), Math.hypot(transform[2], transform[3]));
+    if (!Number.isFinite(width + height) || width <= 0 || height <= 0) return [];
+    return splitPlacementWords({
+      text: record.str,
+      x: transform[4],
+      y: transform[5],
+      angle: Math.atan2(transform[1], transform[0]) * 180 / Math.PI,
+      width,
+      height,
+    });
+  });
+}
+
+const normalizedSearchToken = (value: string) => value.normalize("NFKC").toLocaleLowerCase("en").replace(/[^a-z0-9]+/g, "");
+const angleDifference = (left: number, right: number) => Math.abs((((left - right + 90) % 180) + 180) % 180 - 90);
+function placementCenter(placement: SearchableTextPlacement): [number, number] {
+  const radians = placement.angle * Math.PI / 180;
+  return [placement.x + Math.cos(radians) * placement.width / 2, placement.y + Math.sin(radians) * placement.width / 2];
+}
+
+export function removeExistingTextDuplicates(
+  ocr: SearchableTextPlacement[],
+  existing: SearchableTextPlacement[],
+) {
+  const indexed = new Map<string, SearchableTextPlacement[]>();
+  for (const placement of existing) {
+    const token = normalizedSearchToken(placement.text);
+    if (!token) continue;
+    const values = indexed.get(token) ?? [];
+    values.push(placement);
+    indexed.set(token, values);
+  }
+  return ocr.filter((candidate) => {
+    const matches = indexed.get(normalizedSearchToken(candidate.text));
+    if (!matches?.length) return true;
+    const [candidateX, candidateY] = placementCenter(candidate);
+    return !matches.some((source) => {
+      if (angleDifference(candidate.angle, source.angle) > 20) return false;
+      const [sourceX, sourceY] = placementCenter(source);
+      const tolerance = Math.max(14, candidate.height * 1.8, source.height * 1.8, Math.min(candidate.width, source.width) * .4);
+      return Math.hypot(candidateX - sourceX, candidateY - sourceY) <= tolerance;
+    });
+  });
 }
 
 function encodableEnglishText(font: PDFFont, value: string) {
@@ -167,7 +244,10 @@ export async function createSearchablePdf(
         if (!engine) engine = await createPdfOcrEngine(reportOcrProgress, pageNumber, renderer.numPages);
         const recognized = await recognizePdfPage(page, pageNumber, renderer.numPages, engine, reportOcrProgress, signal, true);
         assertNotCancelled(signal);
-        const placements = searchablePlacements(recognized.page, recognized.rotation, page.getViewport({ scale: 1 }));
+        const placements = removeExistingTextDuplicates(
+          searchablePlacements(recognized.page, recognized.rotation, page.getViewport({ scale: 1 })),
+          sourceTextPlacements(textContent),
+        );
         if (placements.length) layers.set(pageNumber, placements);
         else unreadablePageCount += 1;
       } finally { page.cleanup(); }
