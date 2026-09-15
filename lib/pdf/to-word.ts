@@ -10,11 +10,7 @@ import {
   MAX_PDF_TO_WORD_OUTPUT_SIZE,
 } from "@/lib/pdf/types";
 import { validatePdfFile, validatePdfTotalSize } from "@/lib/pdf/validation";
-import {
-  Packer,
-} from "docx";
 import { extractWordPage } from "./word-extraction";
-import { createWordDocument } from "./word-document";
 import { type WordPage } from "./word-layout";
 import {recognitionLines,buildOcrWordPage,finalizeOcrPages,decorativeBand,fitOcrText,type OcrLayoutLine} from './ocr-word-layout';
 
@@ -59,7 +55,8 @@ type OcrRecognition = {
   confidence: number;
 };
 
-type OcrEngine = {
+export type PdfOcrEngine = {
+  setProgressPage: (pageNumber: number, pageCount: number) => void;
   detect: (image: HTMLCanvasElement) => Promise<{
     degrees: number;
     confidence: number;
@@ -78,7 +75,7 @@ function ocrAlphaWords(recognition: OcrRecognition): number {
  * public/tesseract/ (copied by scripts/copy-pdf-assets.js); language data is
  * fetched lazily from Tesseract's default CDN.
  */
-async function createOcrEngine(
+export async function createPdfOcrEngine(
   onProgress: ((
     current: number,
     total: number,
@@ -87,7 +84,9 @@ async function createOcrEngine(
   ) => void) | undefined,
   pageNumber: number,
   pageCount: number,
-): Promise<OcrEngine> {
+): Promise<PdfOcrEngine> {
+  let currentPage = pageNumber;
+  let currentTotal = pageCount;
   onProgress?.(pageNumber, pageCount, "ocr-download");
   const logger = (message: OcrLoggerMessage) => {
     if (typeof message.progress !== "number") return;
@@ -96,9 +95,9 @@ async function createOcrEngine(
       message.status === "loading language traineddata" ||
       message.status === "loading osd traineddata"
     ) {
-      onProgress?.(pageNumber, pageCount, "ocr-download", message.progress);
+      onProgress?.(currentPage, currentTotal, "ocr-download", message.progress);
     } else if (message.status === "recognizing text") {
-      onProgress?.(pageNumber, pageCount, "ocr", message.progress);
+      onProgress?.(currentPage, currentTotal, "ocr", message.progress);
     }
   };
   // Recognition runs on the fast LSTM engine (best quality + block geometry).
@@ -110,6 +109,10 @@ async function createOcrEngine(
   try { osdWorker = await createBrowserOcrWorker("osd", logger); }
   catch (error) { await recWorker.terminate(); throw error; }
   return {
+    setProgressPage(nextPage, nextTotal) {
+      currentPage = nextPage;
+      currentTotal = nextTotal;
+    },
     async detect(image) {
       const result = await osdWorker.detect(image);
       const data = result?.data ?? {};
@@ -143,11 +146,11 @@ async function createOcrEngine(
 }
 
 /** Recognize a scanned page and preserve its measured layout. */
-async function ocrPageToBlocks(
+export async function recognizePdfPage(
   page: import("pdfjs-dist").PDFPageProxy,
   pageNumber: number,
   pageCount: number,
-  engine: OcrEngine,
+  engine: PdfOcrEngine,
   onProgress: ((
     current: number,
     total: number,
@@ -155,7 +158,9 @@ async function ocrPageToBlocks(
     subProgress?: number,
   ) => void) | undefined,
   signal?: AbortSignal,
-): Promise<WordPage> {
+  includeDecorativeText = false,
+): Promise<{ page: WordPage; rotation: 0 | 90 | 180 | 270 }> {
+  engine.setProgressPage(pageNumber, pageCount);
   // Adaptive render scale: aim for ~3000px on the long edge so dense scans
   // keep enough detail, clamped so small pages aren't over-scaled and huge
   // pages stay within bounded canvas memory.
@@ -238,7 +243,7 @@ async function ocrPageToBlocks(
     const image=chosen.image;
     const swap=chosen.deg===90||chosen.deg===270;
     const pixelWidth=swap?canvas.height:canvas.width,pixelHeight=swap?canvas.width:canvas.height;
-    const band=decorativeBand(recognition.layout,pixelWidth,pixelHeight);
+    const band=includeDecorativeText?undefined:decorativeBand(recognition.layout,pixelWidth,pixelHeight);
     const wordPage=buildOcrWordPage(recognition.layout.filter(l=>!band||l.y0>band),pixelWidth,pixelHeight,swap?baseViewport.height:baseViewport.width,swap?baseViewport.width:baseViewport.height);
     if(band) {
       const crop=document.createElement('canvas');crop.width=pixelWidth;crop.height=Math.ceil(band);
@@ -251,7 +256,7 @@ async function ocrPageToBlocks(
     }
     const context=image.getContext('2d')!;
     fitOcrText(wordPage,(text,size,bold)=>{context.font=`${bold?'bold ':''}${size}px Arial`;return context.measureText(text).width;});
-    return wordPage;
+    return { page: wordPage, rotation: chosen.deg as 0 | 90 | 180 | 270 };
   } catch (caught) {
     if (caught instanceof PdfProcessingError) throw caught;
     throw new PdfProcessingError(
@@ -288,7 +293,7 @@ export async function convertPdfToWord(
 
   // Lazy, document-scoped OCR worker: created on the first scanned page and
   // reused (and terminated) across the whole conversion.
-  let ocrEngine: OcrEngine | null = null;
+  let ocrEngine: PdfOcrEngine | null = null;
 
   const document = await loadPdfRendererDocument(file);
   try {
@@ -324,9 +329,9 @@ export async function convertPdfToWord(
           // Scanned/image-based page: run on-device OCR instead. The Tesseract
           // worker is created once per document and shared across pages.
           if (!ocrEngine) {
-            ocrEngine = await createOcrEngine(onProgress, i + 1, pageCount);
+            ocrEngine = await createPdfOcrEngine(onProgress, i + 1, pageCount);
           }
-          const ocrPage = await ocrPageToBlocks(
+          const recognized = await recognizePdfPage(
             page,
             i + 1,
             pageCount,
@@ -334,6 +339,7 @@ export async function convertPdfToWord(
             onProgress,
             signal,
           );
+          const ocrPage = recognized.page;
           totalTextLength+=ocrPage.blocks.reduce((n,b)=>n+(b.kind==='image'?0:b.kind==='table'?b.rows.flat(2).flatMap(l=>l.spans).reduce((a,s)=>a+s.text.length,0):b.lines.flatMap(l=>l.spans).reduce((a,s)=>a+s.text.length,0)),0);
           pages.push(ocrPage);
         } else {
@@ -354,6 +360,10 @@ export async function convertPdfToWord(
     }
 
     finalizeOcrPages(pages);
+    const [{ Packer }, { createWordDocument }] = await Promise.all([
+      import("docx"),
+      import("./word-document"),
+    ]);
     const doc = createWordDocument(pages);
     const blob = await Packer.toBlob(doc);
     if (blob.size > MAX_PDF_TO_WORD_OUTPUT_SIZE) {

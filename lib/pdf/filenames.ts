@@ -91,3 +91,7 @@ export function makeTableCsvFilename(sourceFilename: string, tableName: string) 
   const table = tableName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "table";
   return `${cleanPdfBaseName(sourceFilename)}-${table}.csv`;
 }
+
+export function makeSearchablePdfFilename(sourceFilename: string) {
+  return `${cleanPdfBaseName(sourceFilename)}-searchable.pdf`;
+}
