@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:pdf-to-word": "node scripts/test-pdf-to-word.cjs && node scripts/test-ocr-word.cjs",
+    "test:pdf-to-word": "node scripts/test-pdf-to-word.cjs && node scripts/test-ocr-word.cjs && node scripts/test-ocr-orientation.cjs",
     "test:organize-pdf": "node scripts/test-organize-pdf.cjs",
     "test:image-ocr": "node scripts/test-image-ocr.cjs",
     "test:pdf-to-excel": "node scripts/test-pdf-to-excel.cjs",

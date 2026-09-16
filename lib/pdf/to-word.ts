@@ -2,6 +2,7 @@
 import { loadPdfRendererDocument } from "@/lib/pdf/renderer";
 import { createBrowserOcrWorker } from "@/lib/ocr/worker";
 import {
+  createOrientationProbeCanvas,
   renderPageToCanvasForOcr,
   rotateCanvas,
 } from "@/lib/pdf/ocr-render";
@@ -43,9 +44,14 @@ const OCR_TARGET_LONG_EDGE_PX = 3000;
 
 // Minimum OSD orientation_confidence before we trust a non-zero angle.
 const OCR_ROTATION_MIN_CONFIDENCE = 5;
+// A very weak non-zero probe can point at the wrong quadrant. Recheck those
+// rare cases at full size before spending OCR passes on the wrong candidates.
+const OCR_ROTATION_RECHECK_CONFIDENCE = 1;
 // A recognize() pass is considered "poor" (likely still rotated/garbled) when
 // it yields fewer than this many 3+ letter words on a full scanned page.
 const OCR_MIN_GOOD_WORDS = 12;
+const OCR_STRONG_RESULT_MIN_CONFIDENCE = 65;
+const OCR_STRONG_RESULT_MIN_LINES = 3;
 
 type OcrLoggerMessage = { status?: string; progress?: number };
 
@@ -67,6 +73,17 @@ export type PdfOcrEngine = {
 
 function ocrAlphaWords(recognition: OcrRecognition): number {
   return (recognition.plainText.match(/[A-Za-z]{3,}/g) ?? []).length;
+}
+
+function isStrongRecognition(recognition: OcrRecognition): boolean {
+  const readableLines = recognition.layout.filter(
+    line => /[A-Za-z]{3,}/.test(line.text) && line.x1 > line.x0 && line.y1 > line.y0,
+  ).length;
+  return (
+    recognition.confidence >= OCR_STRONG_RESULT_MIN_CONFIDENCE &&
+    ocrAlphaWords(recognition) >= OCR_MIN_GOOD_WORDS &&
+    readableLines >= OCR_STRONG_RESULT_MIN_LINES
+  );
 }
 
 /**
@@ -179,6 +196,7 @@ export async function recognizePdfPage(
 
   const canvas = await renderPageToCanvasForOcr(page, scale);
   const rotatedCanvases: HTMLCanvasElement[] = [];
+  let orientationProbe: HTMLCanvasElement | null = null;
 
   type OcrCandidate = {
     deg: number;
@@ -189,19 +207,6 @@ export async function recognizePdfPage(
   let chosen: OcrCandidate | null = null;
 
   try {
-    // Detect the page orientation with Tesseract's OSD. We always heed a
-    // non-zero angle (OSD is reliable for these scans); the confidence only
-    // controls whether we can trust the detected direction immediately or need
-    // to compare it against the opposite/0 candidates.
-    onProgress?.(pageNumber, pageCount, "ocr-orient");
-    const detection = await engine.detect(canvas);
-    assertNotAborted(signal);
-
-    const quadrant = Math.round(detection.degrees / 90) % 4;
-    const detected = ((((quadrant % 4) + 4) % 4) * 90) as 0 | 90 | 180 | 270;
-    const confident = detection.confidence >= OCR_ROTATION_MIN_CONFIDENCE;
-    const opposite = ((detected + 180) % 360) as 0 | 90 | 180 | 270;
-
     // Recognize a rotation (tracking canvases for cleanup) and return the
     // resulting word count so candidates can be compared.
     const evaluate = async (deg: number): Promise<OcrCandidate> => {
@@ -215,25 +220,41 @@ export async function recognizePdfPage(
     const keepBetter = (best: OcrCandidate | null, cand: OcrCandidate) =>
       !best || cand.words > best.words ? cand : best;
 
+    // OSD needs page-level line direction, not full OCR glyph detail. Detect on
+    // a bounded probe, then run recognition only on the unchanged full-quality
+    // canvas. Candidate acceptance and conservative fallbacks remain unchanged.
+    onProgress?.(pageNumber, pageCount, "ocr-orient");
+    orientationProbe = createOrientationProbeCanvas(canvas);
+    let detection = await engine.detect(orientationProbe);
+    assertNotAborted(signal);
+
+    let quadrant = Math.round(detection.degrees / 90) % 4;
+    let detected = ((((quadrant % 4) + 4) % 4) * 90) as 0 | 90 | 180 | 270;
+    if (
+      orientationProbe !== canvas &&
+      detected !== 0 &&
+      detection.confidence < OCR_ROTATION_RECHECK_CONFIDENCE
+    ) {
+      detection = await engine.detect(canvas);
+      assertNotAborted(signal);
+      quadrant = Math.round(detection.degrees / 90) % 4;
+      detected = ((((quadrant % 4) + 4) % 4) * 90) as 0 | 90 | 180 | 270;
+    }
+    const confident = detection.confidence >= OCR_ROTATION_MIN_CONFIDENCE;
+    const opposite = ((detected + 180) % 360) as 0 | 90 | 180 | 270;
+
     if (detected === 0) {
-      // Upright page: no rotation is the only sensible choice. If that reads
-      // very poorly, compare the other three orientations and keep the best.
       chosen = await evaluate(0);
       if (chosen.words < OCR_MIN_GOOD_WORDS) {
-        for (const deg of [180, 90, 270]) {
+        for (const deg of [180, 90, 270] as const) {
           chosen = keepBetter(chosen, await evaluate(deg));
         }
       }
     } else {
       chosen = await evaluate(detected);
-      // Trust the detected direction only when OSD was confident AND the text
-      // reads well; otherwise compare against the opposite and 0Â° and keep the
-      // best, which also catches a wrong 90/270 call on an otherwise upright
-      // page (e.g. page 5, whose OSD confidence is below the trust threshold).
-      if (!(confident && chosen.words >= OCR_MIN_GOOD_WORDS)) {
-        const fallbacks = [opposite, 0];
+      if (!(confident && chosen.words >= OCR_MIN_GOOD_WORDS) && !isStrongRecognition(chosen.recognition)) {
         const tried = new Set<number>([detected]);
-        for (const deg of fallbacks) {
+        for (const deg of [opposite, 0] as const) {
           if (tried.has(deg)) continue;
           tried.add(deg);
           chosen = keepBetter(chosen, await evaluate(deg));
@@ -279,6 +300,10 @@ export async function recognizePdfPage(
         : "On-device OCR could not read this page.",
     );
   } finally {
+    if (orientationProbe && orientationProbe !== canvas) {
+      orientationProbe.width = 0;
+      orientationProbe.height = 0;
+    }
     // Release the rotated canvases (the base render is owned/released here too).
     for (const rotated of rotatedCanvases) {
       rotated.width = 0;

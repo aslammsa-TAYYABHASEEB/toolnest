@@ -75,3 +75,34 @@ export function rotateCanvas(
   return rotated;
 }
 
+/**
+ * Build a smaller copy used only for Tesseract orientation/script detection.
+ * OCR recognition continues to use the original full-resolution render. OSD
+ * needs page-level line direction rather than glyph detail, so bounding this
+ * probe avoids encoding and analyzing millions of unnecessary pixels.
+ */
+export function createOrientationProbeCanvas(
+  source: HTMLCanvasElement,
+  targetLongEdge = 1400,
+): HTMLCanvasElement {
+  const longEdge = Math.max(source.width, source.height);
+  if (longEdge <= targetLongEdge) return source;
+  const scale = targetLongEdge / longEdge;
+  const probe = document.createElement("canvas");
+  probe.width = Math.max(1, Math.round(source.width * scale));
+  probe.height = Math.max(1, Math.round(source.height * scale));
+  const context = probe.getContext("2d", { alpha: false });
+  if (!context) {
+    probe.width = 0;
+    probe.height = 0;
+    throw new PdfProcessingError(
+      "renderer-unavailable",
+      "This browser could not create the canvas needed for OCR orientation detection.",
+    );
+  }
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, probe.width, probe.height);
+  context.drawImage(source, 0, 0, probe.width, probe.height);
+  return probe;
+}
+
