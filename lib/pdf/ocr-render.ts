@@ -29,6 +29,7 @@ export async function renderPageToCanvasForOcr(
       canvas,
       canvasContext: context,
       viewport,
+      intent: "print",
       background: "rgb(255,255,255)",
     }).promise;
     return canvas;
