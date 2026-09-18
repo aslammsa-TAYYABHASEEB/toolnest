@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
-const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
 const canvas = require('@napi-rs/canvas');
 const tesseract = require('tesseract.js');
 const { unzipSync, strFromU8 } = require('fflate');
@@ -91,6 +91,27 @@ async function scannedFixture() {
   const pdf=await PDFDocument.create(), png=await pdf.embedPng(image.toBuffer('image/png')), page=pdf.addPage([700,500]);page.drawImage(png,{x:0,y:0,width:700,height:500});
   return pdf.save();
 }
+async function verticalFixture() {
+  const pdf=await PDFDocument.create(), font=await pdf.embedFont(StandardFonts.Helvetica), page=pdf.addPage([560,650]);
+  const xs=[40,160,280,400,520], ys=[560,430,385,340,295];
+  ys.forEach(y=>page.drawLine({start:{x:40,y},end:{x:520,y},thickness:1}));
+  xs.forEach(x=>page.drawLine({start:{x,y:560},end:{x,y:295},thickness:1}));
+  page.drawText('Normal Header',{x:47,y:495,size:10,font});
+  page.drawText('Conveyance',{x:208,y:445,size:10,font,rotate:degrees(90)});
+  page.drawText('Allowance',{x:222,y:445,size:10,font,rotate:degrees(90)});
+  page.drawText('Support',{x:365,y:545,size:10,font,rotate:degrees(270)});
+  page.drawText('Allowance',{x:350,y:545,size:10,font,rotate:degrees(270)});
+  page.drawText('Three',{x:448,y:445,size:10,font,rotate:degrees(90)});
+  page.drawText('Word',{x:462,y:445,size:10,font,rotate:degrees(90)});
+  page.drawText('Header',{x:476,y:445,size:10,font,rotate:degrees(90)});
+  for(let row=0;row<3;row++) for(let col=0;col<4;col++) page.drawText(String(row*4+col+1),{x:xs[col]+7,y:ys[row+1]-28,size:10,font});
+  return pdf.save();
+}
+async function unlabeledSummaryFixture() {
+  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica),page=pdf.addPage([470,650]);
+  drawGrid(page,font,[['Label','Due','Drawn'],['Period 1','100','200'],['','',''],['','300','400']],{y:540});
+  return pdf.save();
+}
 const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
 (async()=>{
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -104,7 +125,7 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
     pages.forEach((page,pageIndex)=>page.blocks.forEach(block=>{if(block.kind!=='table')return;const rows=block.rows.map(row=>row.map(cell=>excel.inferExcelCellValue(cell.map(lineText).filter(Boolean).join('\n'))));const previous=tables.at(-1);if(block.continuation&&previous){previous.rows.push(...rows);previous.pageEnd=pageIndex+1;}else tables.push({id:`table-${tables.length+1}`,name:`Table ${tables.length+1}`,pageStart:pageIndex+1,pageEnd:pageIndex+1,source:'native',rows});}));
     return {tables,pageCount:pages.length,scannedPageCount:0};
   }
-  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture() };
+  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture() };
   for(const [name,bytes] of Object.entries(fixtures)) fs.writeFileSync(path.join(output,`${name}.pdf`),bytes);
   const native=await extractNative(fixtures.native);
   assert.equal(native.tables.length,1); assert.equal(native.tables[0].rows.length,4); assert.equal(native.tables[0].rows[0].length,3);
@@ -126,6 +147,15 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   assert.equal(stacked.rows.length,5); assert.equal(stacked.rows[2][2],'3'); assert.equal(stacked.rows[3][2],'8');
   assert.ok(stacked.merges.some(merge=>merge.startRow===2&&merge.endRow===3&&merge.startColumn===0));
   const vectorWide=await vectorPages(fixtures.wide);
+  const vertical=(await vectorPages(fixtures.vertical))[0][0];
+  assert.ok(vertical,'Both 90 and 270 degree headers should remain in the native grid');
+  assert.equal(vertical.rows[0][0],'Normal Header');
+  assert.equal(vertical.rows[0][1],'Conveyance Allowance');
+  assert.equal(vertical.rows[0][2],'Support Allowance');
+  assert.equal(vertical.rows[0][3],'Three Word Header');
+  const summary=(await vectorPages(fixtures.summary))[0][0];
+  assert.equal(summary.rows.length,3,'Only the wholly empty unmerged row should be removed');
+  assert.deepEqual(summary.rows[2],['','300','400'],'The unlabeled numeric summary must stay intact');
   assert.equal(vectorWide.length,2);
   for (const [index, pageTables] of vectorWide.entries()) {
     assert.equal(pageTables.length,1); const table=pageTables[0];
@@ -147,7 +177,21 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   const csvBlob=excel.createTableCsv(native.tables[0]), csvBytes=new Uint8Array(await csvBlob.arrayBuffer()), csv=await csvBlob.text(); fs.writeFileSync(path.join(output,'native-table.csv'),csvBytes);
   assert.deepEqual(Array.from(csvBytes.slice(0,3)),[0xEF,0xBB,0xBF]);
   assert.equal(csv,'Item,Description,Amount\r\n1001,Paper,25.5\r\n1002,,8\r\n1003,Folders,12\r\n');
-  assert.equal(excel.inferExcelCellValue('0012'),'0012'); assert.equal(excel.inferExcelCellValue('12,500'),'12,500'); assert.equal(excel.inferExcelCellValue('2026-09-15'),'2026-09-15');
+  for(const [source,expected] of [['22,960',22960],['34080',34080],['123.45',123.45],['1,234.50',1234.5],['-2500',-2500],['(2,500)',-2500],['0',0],['198323',198323],['2,569',2569]]) assert.equal(excel.inferExcelCellValue(source),expected);
+  for(const source of ['0012','0660010002450009','18/81','245-9','BS-03','12-05-2023','12-05-2023 to 31-05-2023','C=A+B','A0 1246']) assert.equal(excel.inferExcelCellValue(source),source);
+  assert.equal(excel.inferExcelCellValue('12345','Bank Account'),'12345');
+  const semanticRows=[['Account','Amount','Decimal'],['0660010002450009',22960,1234.5],['',100,200]];
+  const semanticTable={id:'semantic',name:'Semantic',pageStart:1,pageEnd:1,source:'native',rows:semanticRows};
+  const semanticZip=unzipSync(new Uint8Array(await excel.createExcelWorkbook([semanticTable]).arrayBuffer()));
+  const semanticSheet=strFromU8(semanticZip['xl/worksheets/sheet1.xml']),semanticStyles=strFromU8(semanticZip['xl/styles.xml']);
+  assert.match(semanticSheet,/<c r="A2" t="inlineStr"><is><t>0660010002450009<\/t><\/is><\/c>/);
+  assert.match(semanticSheet,/<c r="B2" s="2"><v>22960<\/v><\/c>/);
+  assert.match(semanticSheet,/<c r="C2" s="3"><v>1234.5<\/v><\/c>/);
+  assert.match(semanticSheet,/<c r="A3" t="inlineStr"><is><t><\/t><\/is><\/c><c r="B3" s="2"><v>100<\/v><\/c>/);
+  assert.match(semanticStyles,/numFmtId="3"/);assert.match(semanticStyles,/#,##0\.##########/);
+  const semanticCsv=await excel.createTableCsv(semanticTable).text();
+  assert.equal(semanticCsv,'Account,Amount,Decimal\r\n0660010002450009,22960,1234.5\r\n,100,200\r\n');
+  assert.equal(await excel.createTableCsv({...semanticTable,rows:[['Label','Value'],['North, East','say "yes"']]}).text(),'Label,Value\r\n"North, East","say ""yes"""\r\n');
   if(process.argv.includes('--runtime')) {
     const worker=await tesseract.createWorker('eng',1,{cachePath:path.resolve('work/image-ocr-qa')});
     try {
@@ -155,6 +199,12 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
       const lines=recognitionLines(data), page=buildOcrWordPage(lines,1400,1000,700,500), table=page.blocks.find(block=>block.kind==='table');
       assert.ok(table,'Real OCR should preserve a regular scanned table'); assert.equal(table.rows.length,4); assert.equal(table.rows[0].length,3);
       assert.match(table.rows[1][1].map(lineText).join(' '),/Apples/i); assert.equal(table.rows[2][2].map(lineText).join(' '),'');
+      const ocrRows=table.rows.map(row=>row.map(cell=>excel.inferExcelCellValue(cell.map(lineText).join(' '))));
+      const ocrTable={id:'ocr',name:'OCR table',pageStart:1,pageEnd:1,source:'ocr',rows:ocrRows};
+      const ocrZip=unzipSync(new Uint8Array(await excel.createExcelWorkbook([ocrTable]).arrayBuffer()));
+      const ocrSheet=strFromU8(ocrZip['xl/worksheets/sheet1.xml']);
+      assert.match(ocrSheet,/<v>12<\/v>/);assert.match(ocrSheet,/Apples/);
+      assert.equal((await excel.createTableCsv(ocrTable).text()).split('\r\n').length,5);
       console.log('PASS: real OCR reconstructed the scanned 4-row, 3-column table with its blank cell.');
     } finally { await worker.terminate(); }
   }
