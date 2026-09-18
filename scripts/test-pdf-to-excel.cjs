@@ -21,6 +21,8 @@ const { extractWordPage } = require('../lib/pdf/word-extraction.ts');
 const { lineText, markTableContinuations } = require('../lib/pdf/word-layout.ts');
 const { buildOcrWordPage, recognitionLines } = require('../lib/pdf/ocr-word-layout.ts');
 const { extractVectorGridTables } = require('../lib/pdf/vector-table.ts');
+const { extractScannedGridTables } = require('../lib/pdf/scanned-table.ts');
+const { rotateCanvas } = require('../lib/pdf/ocr-render.ts');
 const output = path.resolve('work/pdf-excel-qa');
 fs.mkdirSync(output, { recursive:true });
 
@@ -192,6 +194,30 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   const semanticCsv=await excel.createTableCsv(semanticTable).text();
   assert.equal(semanticCsv,'Account,Amount,Decimal\r\n0660010002450009,22960,1234.5\r\n,100,200\r\n');
   assert.equal(await excel.createTableCsv({...semanticTable,rows:[['Label','Value'],['North, East','say "yes"']]}).text(),'Label,Value\r\n"North, East","say ""yes"""\r\n');
+  const ruled=canvas.createCanvas(900,500),ruledContext=ruled.getContext('2d');
+  ruledContext.fillStyle='white';ruledContext.fillRect(0,0,900,500);
+  ruledContext.strokeStyle='black';ruledContext.lineWidth=2;
+  for(const x of [30,120,480,850]){ruledContext.beginPath();ruledContext.moveTo(x,50);ruledContext.lineTo(x,410);ruledContext.stroke();}
+  for(const y of [50,140,230,320,410]){ruledContext.beginPath();ruledContext.moveTo(30,y);ruledContext.lineTo(850,y);ruledContext.stroke();}
+  const word=(text,x,y)=>({text,x0:x,y0:y,x1:x+Math.max(20,text.length*9),y1:y+24,confidence:95});
+  const ocrWords=[word('Account',40,90),word('Date',130,90),word('Amount',490,90),
+    word('0660010002450009',40,180),word('12-05-2023',130,180),word('22,960',490,180),
+    word('0002',40,270),word('13052023',130,270),word('1,234.50',490,270),
+    word('Total',130,360),word('24,194.50',490,360)];
+  const ocrLines=ocrWords.map(w=>({text:w.text,x0:w.x0,y0:w.y0,x1:w.x1,y1:w.y1,height:24,confidence:95,words:[w]}));
+  for(const degree of [0,90,180,270]){
+    const turned=rotateCanvas(ruled,degree),upright=rotateCanvas(turned,((360-degree)%360));
+    const detected=extractScannedGridTables(upright,ocrLines,900,500);
+    assert.equal(detected.length,1,`Ruled scanned grid at ${degree} degrees`);
+    assert.equal(detected[0].rows.length,4);assert.equal(detected[0].rows[0].length,3);
+    assert.equal(detected[0].rows[3][0],'');
+    const typed=excel.scannedTableRows(detected[0]);
+    assert.equal(typed[1][0],'0660010002450009');assert.equal(typed[1][2],22960);
+    assert.equal(typed[2][1],'13052023');assert.equal(typed[2][2],1234.5);
+    assert.equal(typed[3][0],'');assert.equal(typed[3][2],24194.5);
+    if(turned!==ruled){turned.width=0;turned.height=0;upright.width=0;upright.height=0;}
+  }
+  assert.equal(extractScannedGridTables(canvas.createCanvas(900,500),ocrLines,900,500).length,0);
   if(process.argv.includes('--runtime')) {
     const worker=await tesseract.createWorker('eng',1,{cachePath:path.resolve('work/image-ocr-qa')});
     try {

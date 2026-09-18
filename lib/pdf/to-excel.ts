@@ -1,9 +1,8 @@
 import { strToU8, zipSync } from "fflate";
-import type { Worker } from "tesseract.js";
 import { PdfProcessingError } from "@/lib/pdf/errors";
-import { createBrowserOcrWorker } from "@/lib/ocr/worker";
-import { renderPageToCanvasForOcr } from "@/lib/pdf/ocr-render";
-import { buildOcrWordPage, recognitionLines } from "@/lib/pdf/ocr-word-layout";
+import { renderPageToCanvasForOcr, rotateCanvas } from "@/lib/pdf/ocr-render";
+import { extractScannedGridTables, type ScannedGridTable } from "@/lib/pdf/scanned-table";
+import { createPdfOcrEngine, recognizePdfPage, type PdfOcrEngine } from "@/lib/pdf/to-word";
 import { loadPdfRendererDocument } from "@/lib/pdf/renderer";
 import { validatePdfFile } from "@/lib/pdf/validation";
 import { extractWordPage } from "@/lib/pdf/word-extraction";
@@ -57,6 +56,19 @@ function tableRows(table: WordTable): ExcelCellValue[][] {
   return rows.map(row => row.map((cell, column) => inferExcelCellValue(cell, rows[0]?.[column] ?? "")));
 }
 
+export function scannedTableRows(grid: ScannedGridTable): ExcelCellValue[][] {
+  const columns = grid.rows[0]?.length ?? 0;
+  const headings = Array.from({ length: columns }, (_, column) =>
+    grid.rows.slice(0, grid.headerRows).map(row => row[column]).join(" "));
+  for (let column = 0; column < columns; column++) {
+    const cells = grid.rows.slice(grid.headerRows).map(row => row[column] ?? "").filter(Boolean);
+    const dates = cells.filter(cell => /\b\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\b/.test(cell)).length;
+    if (dates >= 2 && dates >= cells.length * .3) headings[column] += " date";
+  }
+  return grid.rows.map(row => row.map((cell, column) =>
+    /\bdate\b/i.test(headings[column]) ? cell.trim() : inferExcelCellValue(cell, headings[column])));
+}
+
 function safeSheetName(name: string, used: Set<string>) {
   const base = (name.replace(/[\\/*?:[\]]/g, " ").replace(/\s+/g, " ").trim() || "Table").slice(0, 31);
   let candidate = base;
@@ -79,7 +91,7 @@ function columnName(index: number) {
   return result;
 }
 
-function worksheetXml(rows: ExcelCellValue[][], merges: GridMerge[] = [], headerRows = 1) {
+function worksheetXml(rows: ExcelCellValue[][], merges: GridMerge[] = [], headerRows = 1, scanned = false) {
   const columns = Math.max(1, ...rows.map((row) => row.length));
   const widths = Array.from({ length: columns }, (_, column) => Math.min(40, Math.max(10,
     ...rows.slice(0, 200).map((row) => String(row[column] ?? "").split("\n").reduce((n, line) => Math.max(n, line.length), 0) + 2),
@@ -98,7 +110,7 @@ function worksheetXml(rows: ExcelCellValue[][], merges: GridMerge[] = [], header
   }).join("");
   const last = `${columnName(columns - 1)}${Math.max(1, rows.length)}`;
   const mergeXml = merges.length ? `<mergeCells count="${merges.length}">${merges.map(merge => `<mergeCell ref="${columnName(merge.startColumn)}${merge.startRow + 1}:${columnName(merge.endColumn)}${merge.endRow + 1}"/>`).join("")}</mergeCells>` : "";
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="${headerRows}" topLeftCell="A${headerRows + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("")}</cols><sheetData>${rowXml}</sheetData>${mergeXml}${rows.length && !merges.length ? `<autoFilter ref="A1:${last}"/>` : ""}</worksheet>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0">${scanned && headerRows === 0 ? "" : `<pane ySplit="${headerRows}" topLeftCell="A${headerRows + 1}" activePane="bottomLeft" state="frozen"/>`}</sheetView></sheetViews><cols>${widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("")}</cols><sheetData>${rowXml}</sheetData>${mergeXml}${rows.length && (!scanned || headerRows > 0) && !merges.length ? `<autoFilter ref="A1:${last}"/>` : ""}</worksheet>`;
 }
 
 export function createExcelWorkbook(tables: ExtractedPdfTable[]): Blob {
@@ -112,7 +124,7 @@ export function createExcelWorkbook(tables: ExtractedPdfTable[]): Blob {
     "xl/_rels/workbook.xml.rels": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`),
     "xl/styles.xml": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.##########"/></numFmts><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="10"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F4E78"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"><color rgb="FFD9E2F3"/></left><right style="thin"><color rgb="FFD9E2F3"/></right><top style="thin"><color rgb="FFD9E2F3"/></top><bottom style="thin"><color rgb="FFD9E2F3"/></bottom></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="3" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`),
   };
-  sheets.forEach((sheet, index) => { files[`xl/worksheets/sheet${index + 1}.xml`] = strToU8(worksheetXml(sheet.rows, sheet.merges, sheet.headerRows)); });
+  sheets.forEach((sheet, index) => { files[`xl/worksheets/sheet${index + 1}.xml`] = strToU8(worksheetXml(sheet.rows, sheet.merges, sheet.headerRows, sheet.source === "ocr")); });
   const zipped = zipSync(files, { level: 6 });
   if (zipped.byteLength > MAX_PDF_TO_EXCEL_OUTPUT_SIZE) throw new PdfProcessingError("word-output-too-large", "The Excel workbook exceeds the 50 MB browser safety limit.");
   return new Blob([zipped], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -132,18 +144,17 @@ export async function extractPdfTables(
 ): Promise<PdfTableExtractionResult> {
   await validatePdfFile(file);
   const document = await loadPdfRendererDocument(file);
-  let worker: Worker | null = null;
-  let activePage = 0;
+  let worker: PdfOcrEngine | null = null;
   let scannedPageCount = 0;
   const pages: WordPage[] = [];
   const vectorPages = new Map<number, VectorGridTable[]>();
+  const scannedGridPages = new Map<number, ScannedGridTable[]>();
   const sources: Array<"native" | "ocr"> = [];
   try {
     if (!document.numPages || document.numPages > MAX_PDF_TO_EXCEL_SOURCE_PAGES) {
       throw new PdfProcessingError("word-workload-too-large", `This tool supports PDFs with up to ${MAX_PDF_TO_EXCEL_SOURCE_PAGES} pages.`);
     }
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-      activePage = pageNumber;
       const page = await document.getPage(pageNumber);
       try {
         onProgress?.(pageNumber, document.numPages, "analyzing");
@@ -161,23 +172,27 @@ export async function extractPdfTables(
         }
         scannedPageCount += 1;
         if (!worker) {
-          worker = await createBrowserOcrWorker("eng", (message) => {
-            const phase = /loading|initializing/i.test(message.status) ? "ocr-download" : "ocr";
-            onProgress?.(activePage, document.numPages, phase, message.progress);
-          });
+          worker = await createPdfOcrEngine((current, total, phase, progress) =>
+            onProgress?.(current, total, phase === "ocr-download" ? "ocr-download" : "ocr", progress),
+          pageNumber, document.numPages);
         }
-        const viewport = page.getViewport({ scale: 1 });
-        const scale = Math.min(4, Math.max(2.5, 3000 / Math.max(viewport.width, viewport.height)));
-        const canvas = await renderPageToCanvasForOcr(page, scale);
+        const recognized = await recognizePdfPage(page, pageNumber, document.numPages, worker,
+          (current, total, phase, progress) =>
+            onProgress?.(current, total, phase === "ocr-download" ? "ocr-download" : "ocr", progress),
+          undefined, true);
+        const baseGridCanvas = await renderPageToCanvasForOcr(page, 1.5);
+        let gridCanvas: HTMLCanvasElement = baseGridCanvas;
         try {
-          onProgress?.(pageNumber, document.numPages, "ocr");
-          const { data } = await worker.recognize(canvas, { rotateAuto: true }, { blocks: true, text: true });
-          const adjustedViewport = page.getViewport({ scale: 1 });
-          pages.push(buildOcrWordPage(recognitionLines(data), canvas.width, canvas.height, adjustedViewport.width, adjustedViewport.height));
-          sources.push("ocr");
+          gridCanvas = rotateCanvas(baseGridCanvas, recognized.rotation);
+          const grids = extractScannedGridTables(gridCanvas, recognized.ocrLines,
+            recognized.ocrPixelWidth, recognized.ocrPixelHeight);
+          if (grids.length) scannedGridPages.set(pageNumber, grids);
         } finally {
-          canvas.width = 0; canvas.height = 0;
+          if (gridCanvas !== baseGridCanvas) { gridCanvas.width = 0; gridCanvas.height = 0; }
+          baseGridCanvas.width = 0; baseGridCanvas.height = 0;
         }
+        pages.push(recognized.page);
+        sources.push("ocr");
       } finally { page.cleanup(); }
     }
     markTableContinuations(pages);
@@ -186,6 +201,14 @@ export async function extractPdfTables(
       const vectorTables = vectorPages.get(pageIndex + 1);
       if (vectorTables) {
         for (const vector of vectorTables) tables.push({ id: `table-${tables.length + 1}`, name: `Table ${tables.length + 1}`, pageStart: pageIndex + 1, pageEnd: pageIndex + 1, source: "native", rows: vector.rows.map(row => row.map((cell, column) => inferExcelCellValue(cell, vector.rows.slice(0, vector.headerRows).map(header => header[column]).join(" ")))), merges: vector.merges, headerRows: vector.headerRows });
+        return;
+      }
+      const scannedGrids = scannedGridPages.get(pageIndex + 1);
+      if (scannedGrids) {
+        for (const grid of scannedGrids) tables.push({ id: `table-${tables.length + 1}`,
+          name: `Table ${tables.length + 1}`, pageStart: pageIndex + 1, pageEnd: pageIndex + 1,
+          source: "ocr", rows: scannedTableRows(grid),
+          merges: grid.merges, headerRows: grid.headerRows });
         return;
       }
       page.blocks.forEach((block) => {
