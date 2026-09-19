@@ -29,6 +29,7 @@ export type PrivacyFinding = {
 export type PrivacyCoverage = { category: PrivacyCategory; state: PrivacyCoverageState; note?: string };
 export type PrivacyInspection = {
   pageCount: number;
+  signed: boolean;
   findings: PrivacyFinding[];
   coverage: PrivacyCoverage[];
   limits: { fileBytes: number; objects: number; pages: number };

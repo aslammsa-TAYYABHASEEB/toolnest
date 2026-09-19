@@ -102,8 +102,10 @@ function structuralFindings(document: PDFDocument, findings: PrivacyFinding[], w
   const seenFileSpecs = new Set<string>();
   const pagePaths: Array<{ path: string; page: number }> = [];
   const pageForPath = (path: string) => pagePaths.find(item => path.startsWith(`${item.path}/`))?.page;
+  let signed = false;
   const objectCount = inspectPdfObjects(document, ({ object, path, ref }) => {
     const dict = object instanceof PDFStream ? object.dict : object;
+    if (pdfEntry(dict, "ByteRange") || pdfEntryText(dict, "FT") === "Sig" || pdfEntryText(dict, "Type") === "Sig") signed = true;
     const pageNumber = pageByNode.get(dict);
     if (pageNumber) pagePaths.push({ path, page: pageNumber });
     if (object instanceof PDFStream && object.getContentsSize() > PRIVACY_LIMITS.streamBytes) oversizedStreams++;
@@ -219,7 +221,7 @@ function structuralFindings(document: PDFDocument, findings: PrivacyFinding[], w
     rationale: "Image profiles or private metadata can exist inside encoded image data.", confidence: "medium",
     evidence: { imageStreams: imageCount, imageStreamsWithMetadataReferences: imageMetadataCount }, removal: "inspect-only",
     verificationMethod: "Inspect image streams with format-aware tools in a later version." });
-  return objectCount;
+  return { objectCount, signed };
 }
 
 async function pageEvidence(renderer: PDFDocumentProxy, findings: PrivacyFinding[], warnings: string[]) {
@@ -266,7 +268,7 @@ export async function inspectPdfPrivacy(file: File, openRenderer: PrivacyRendere
   const pageCount = document.getPageCount();
   if (!pageCount || pageCount > PRIVACY_LIMITS.pages) throw new PdfProcessingError("workload-too-large", "This inspector supports PDFs with 1–200 pages.");
   const findings: PrivacyFinding[] = [], warnings: string[] = [];
-  const objects = structuralFindings(document, findings, warnings);
+  const structure = structuralFindings(document, findings, warnings);
   const renderer = await openRenderer(file);
   try {
     try {
@@ -288,5 +290,6 @@ export async function inspectPdfPrivacy(file: File, openRenderer: PrivacyRendere
     ...(category === "redaction-risk" ? { note: "Complex graphic masking cannot be ruled out; no absence-of-leak guarantee." } : {}),
     ...(category === "image-metadata" ? { note: "Encoded image payloads and EXIF are not decoded." } : {}) }));
   warnings.push("This is a structural inspection, not a forensic or verified-clean certificate. Encrypted and proprietary PDFs are not fully supported.");
-  return { pageCount, findings, coverage, limits: { fileBytes: PRIVACY_LIMITS.fileBytes, objects, pages: PRIVACY_LIMITS.pages }, warnings };
+  return { pageCount, signed: structure.signed, findings, coverage,
+    limits: { fileBytes: PRIVACY_LIMITS.fileBytes, objects: structure.objectCount, pages: PRIVACY_LIMITS.pages }, warnings };
 }
