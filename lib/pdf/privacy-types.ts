@@ -44,3 +44,12 @@ export type MetadataSanitizationVerification = {
   remainingMetadataFindings: number;
   warnings: string[];
 };
+
+export type AttachmentSanitizationVerification = {
+  attachments: PrivacyRemovalStatus;
+  pageCountPreserved: boolean;
+  parseable: boolean;
+  remainingAttachmentFindings: number;
+  remainingAttachmentStructures: number;
+  warnings: string[];
+};

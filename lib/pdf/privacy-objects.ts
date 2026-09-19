@@ -85,6 +85,20 @@ export function pdfObjectReachability(document: PDFDocument) {
     unreachable: all.filter(([ref]) => !seenRefs.has(ref.toString())).map(([ref]) => ref.toString()) };
 }
 
+export function attachmentStructureSummary(document: PDFDocument) {
+  const summary = { fileSpecs: 0, efDictionaries: 0, associatedFileEntries: 0,
+    embeddedFileNameTrees: 0, fileAttachmentAnnotations: 0 };
+  inspectPdfObjects(document, ({ object }) => {
+    const dict = object instanceof PDFStream ? object.dict : object;
+    if (pdfEntryText(dict, "Type") === "Filespec") summary.fileSpecs++;
+    if (dict.has(PDFName.of("EF"))) summary.efDictionaries++;
+    if (dict.has(PDFName.of("AF"))) summary.associatedFileEntries++;
+    if (dict.has(PDFName.of("EmbeddedFiles"))) summary.embeddedFileNameTrees++;
+    if (pdfEntryText(dict, "Subtype") === "FileAttachment") summary.fileAttachmentAnnotations++;
+  });
+  return summary;
+}
+
 export function pdfValue(value: unknown, max = 160): string | undefined {
   if (value instanceof PDFString || value instanceof PDFHexString) return value.decodeText().slice(0, max);
   if (value instanceof PDFName) return value.asString().slice(1, max + 1);
