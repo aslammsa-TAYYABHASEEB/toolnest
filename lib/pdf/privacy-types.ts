@@ -53,3 +53,12 @@ export type AttachmentSanitizationVerification = {
   remainingAttachmentStructures: number;
   warnings: string[];
 };
+
+export type ActiveActionSanitizationVerification = {
+  activeContent: PrivacyRemovalStatus;
+  pageCountPreserved: boolean;
+  parseable: boolean;
+  remainingActiveContentFindings: number;
+  remainingActiveContentStructures: number;
+  warnings: string[];
+};

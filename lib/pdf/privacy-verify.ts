@@ -1,8 +1,8 @@
 import { PDFName } from "pdf-lib";
 import { inspectPdfPrivacy, type PrivacyRendererOpener } from "./privacy-inspect";
 import { loadPdfDocument } from "./loading";
-import { attachmentStructureSummary, pdfObjectReachability } from "./privacy-objects";
-import type { AttachmentSanitizationVerification, MetadataSanitizationVerification, PrivacyInspection } from "./privacy-types";
+import { activeActionStructureSummary, attachmentStructureSummary, pdfObjectReachability } from "./privacy-objects";
+import type { ActiveActionSanitizationVerification, AttachmentSanitizationVerification, MetadataSanitizationVerification, PrivacyInspection } from "./privacy-types";
 
 const encoder = new TextEncoder();
 function includesBytes(haystack: Uint8Array, needle: Uint8Array) {
@@ -91,5 +91,38 @@ export async function verifyAttachmentSanitization(
     warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
     return { verification: { attachments: "could-not-verify", pageCountPreserved: false, parseable: false,
       remainingAttachmentFindings: -1, remainingAttachmentStructures: -1, warnings } };
+  }
+}
+
+export async function verifyActiveActionSanitization(
+  source: File,
+  outputBytes: Uint8Array,
+  before: PrivacyInspection,
+  secrets: string[],
+  openRenderer?: PrivacyRendererOpener,
+): Promise<{ inspection?: PrivacyInspection; verification: ActiveActionSanitizationVerification }> {
+  const warnings: string[] = [];
+  try {
+    const output = new File([outputBytes.slice().buffer as ArrayBuffer], source.name, { type: "application/pdf" });
+    const inspection = await inspectPdfPrivacy(output, openRenderer);
+    const parsed = await loadPdfDocument(output);
+    const reachability = pdfObjectReachability(parsed);
+    const structures = activeActionStructureSummary(parsed);
+    const structureCount = Object.values(structures).reduce((total, count) => total + count, 0);
+    const findings = inspection.findings.filter(finding => finding.category === "active-content" &&
+      (finding.title === "JavaScript action" || finding.title === "Launch action")).length;
+    const byteMatches = secrets.filter(value => serializedPdfContainsSecret(outputBytes, value)).length;
+    if (reachability.unreachable.length) warnings.push(`${reachability.unreachable.length} unreachable output object(s) remain.`);
+    if (structureCount) warnings.push(`${structureCount} supported active-content structure(s) remain.`);
+    if (byteMatches) warnings.push(`${byteMatches} prior active-action value(s) remain in common serialized encodings.`);
+    const pageCountPreserved = parsed.getPageCount() === before.pageCount;
+    if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
+    return { inspection, verification: { activeContent: findings === 0 && structureCount === 0 && byteMatches === 0 &&
+      !reachability.unreachable.length ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
+      remainingActiveContentFindings: findings, remainingActiveContentStructures: structureCount, warnings } };
+  } catch (error) {
+    warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
+    return { verification: { activeContent: "could-not-verify", pageCountPreserved: false, parseable: false,
+      remainingActiveContentFindings: -1, remainingActiveContentStructures: -1, warnings } };
   }
 }

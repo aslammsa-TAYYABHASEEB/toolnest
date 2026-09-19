@@ -99,6 +99,84 @@ export function attachmentStructureSummary(document: PDFDocument) {
   return summary;
 }
 
+function resolvedObject(document: PDFDocument, value: unknown) {
+  return value instanceof PDFRef ? document.context.lookup(value) : value;
+}
+
+export type DangerousActionKind = "JavaScript" | "Launch";
+export function dangerousActionKind(document: PDFDocument, value: unknown): DangerousActionKind | undefined {
+  const resolved = resolvedObject(document, value);
+  if (!(resolved instanceof PDFDict)) return undefined;
+  const kind = pdfEntryText(resolved, "S");
+  if (kind === "Launch") return "Launch";
+  if (kind === "JavaScript" || resolved.has(PDFName.of("JS"))) return "JavaScript";
+  return undefined;
+}
+
+function actionValueContainsDangerous(document: PDFDocument, value: unknown, seenRefs = new Set<string>(), seenDirect = new WeakSet<object>()): boolean {
+  if (value instanceof PDFRef) {
+    const key = value.toString();
+    if (seenRefs.has(key)) return false;
+    seenRefs.add(key);
+    value = document.context.lookup(value);
+  } else if (value && typeof value === "object") {
+    if (seenDirect.has(value)) return false;
+    seenDirect.add(value);
+  }
+  if (value instanceof PDFArray) {
+    for (let index = 0; index < value.size(); index++) if (actionValueContainsDangerous(document, value.get(index), seenRefs, seenDirect)) return true;
+    return false;
+  }
+  if (!(value instanceof PDFDict)) return false;
+  if (dangerousActionKind(document, value)) return true;
+  const next = value.get(PDFName.of("Next"));
+  return next ? actionValueContainsDangerous(document, next, seenRefs, seenDirect) : false;
+}
+
+export function activeActionStructureSummary(document: PDFDocument) {
+  const summary = { dangerousActions: 0, javaScriptNameTrees: 0, dangerousOpenActions: 0,
+    dangerousActionEntries: 0, dangerousAdditionalActions: 0, dangerousNextBranches: 0 };
+  inspectPdfObjects(document, ({ object, path }) => {
+    const dict = object instanceof PDFStream ? object.dict : object;
+    if (dangerousActionKind(document, dict)) summary.dangerousActions++;
+    if (path === "trailer/Root/Names" && dict.has(PDFName.of("JavaScript"))) summary.javaScriptNameTrees++;
+    const openAction = path === "trailer/Root" ? dict.get(PDFName.of("OpenAction")) : undefined;
+    if (openAction && actionValueContainsDangerous(document, openAction)) summary.dangerousOpenActions++;
+    const action = dict.get(PDFName.of("A"));
+    if (action && actionValueContainsDangerous(document, action)) summary.dangerousActionEntries++;
+    const additional = resolvedObject(document, dict.get(PDFName.of("AA")));
+    if (additional instanceof PDFDict) for (const [, value] of additional.entries())
+      if (actionValueContainsDangerous(document, value)) summary.dangerousAdditionalActions++;
+    const next = dict.get(PDFName.of("Next"));
+    if (next && actionValueContainsDangerous(document, next)) summary.dangerousNextBranches++;
+  });
+  return summary;
+}
+
+export function activeActionSecretValues(document: PDFDocument) {
+  const values = new Set<string>();
+  const collect = (value: unknown, depth = 0) => {
+    if (depth > 2) return;
+    const resolved = resolvedObject(document, value);
+    const text = resolved instanceof PDFString || resolved instanceof PDFHexString ? resolved.decodeText().slice(0, 512) : undefined;
+    if (text && text.length >= 4) values.add(text);
+    else if (resolved instanceof PDFDict) for (const [key, child] of resolved.entries()) {
+      if (key.asString() === "/Next") continue;
+      collect(child, depth + 1);
+    }
+  };
+  const collectAction = (object: PDFDict | PDFStream) => {
+    const dict = object instanceof PDFStream ? object.dict : object;
+    if (!dangerousActionKind(document, dict)) return;
+    for (const [key, value] of dict.entries())
+      if (!new Set(["/Type", "/S", "/Next"]).has(key.asString())) collect(value);
+  };
+  inspectPdfObjects(document, ({ object }) => collectAction(object));
+  for (const [, object] of document.context.enumerateIndirectObjects())
+    if (object instanceof PDFDict || object instanceof PDFStream) collectAction(object);
+  return [...values];
+}
+
 export function pdfValue(value: unknown, max = 160): string | undefined {
   if (value instanceof PDFString || value instanceof PDFHexString) return value.decodeText().slice(0, max);
   if (value instanceof PDFName) return value.asString().slice(1, max + 1);
