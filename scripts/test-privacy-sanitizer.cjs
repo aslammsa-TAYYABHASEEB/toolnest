@@ -8,7 +8,7 @@ Module._resolveFilename=function(id,...args){return resolve.call(this,id.startsW
 globalThis.DOMMatrix=canvas.DOMMatrix;globalThis.ImageData=canvas.ImageData;globalThis.Path2D=canvas.Path2D;
 Promise.try??=(callback,...args)=>Promise.resolve().then(()=>callback(...args));
 const {sanitizePdfMetadata}=require('../lib/pdf/privacy-sanitize.ts');
-const {serializedPdfContainsSecret}=require('../lib/pdf/privacy-verify.ts');
+const {serializedPdfContainsSecret,serializedPdfMetadataResiduals,verifyMetadataSanitization}=require('../lib/pdf/privacy-verify.ts');
 const N=value=>PDFName.of(value),encoder=new TextEncoder();
 function concat(...values){const length=values.reduce((n,v)=>n+v.length,0),out=new Uint8Array(length);let at=0;for(const v of values){out.set(v,at);at+=v.length}return out}
 async function fixture(){const pdf=await PDFDocument.create({updateMetadata:false}),p=pdf.addPage([420,280]),font=await pdf.embedFont(StandardFonts.Helvetica);p.drawText('PUBLIC SEARCHABLE TEXT',{x:42,y:205,size:20,font});p.drawRectangle({x:35,y:40,width:350,height:200,borderColor:rgb(.1,.3,.65),borderWidth:2});return pdf}
@@ -28,6 +28,8 @@ function pixelDifference(a,b){assert.equal(a.length,b.length);let sum=0;for(let 
     ['custom Info',['CUSTOM_SECRET_B'],async p=>setCustomInfo(p,'PrivateCase','CUSTOM_SECRET_B')],
     ['XMP',['XMP_SECRET_C'],async p=>setXmp(p,'XMP_SECRET_C')],
     ['Info and XMP',['COMBINED_INFO_D','COMBINED_XMP_D'],async p=>{p.setAuthor('COMBINED_INFO_D');setXmp(p,'COMBINED_XMP_D')}],
+    ['CamScanner metadata also visible',['CamScanner'],async p=>{p.setAuthor('CamScanner');const font=await p.embedFont(StandardFonts.Helvetica);p.getPage(0).drawText('CamScanner',{x:42,y:165,size:18,font})},true],
+    ['Title and Subject also visible',['SHARED_VISIBLE_TITLE'],async p=>{p.setTitle('SHARED_VISIBLE_TITLE');p.setSubject('SHARED_VISIBLE_TITLE');const font=await p.embedFont(StandardFonts.Helvetica);p.getPage(0).drawText('SHARED_VISIBLE_TITLE',{x:42,y:165,size:18,font})},true],
     ['orphan metadata object',['ORPHAN_SECRET_E'],async p=>{p.context.register(PDFString.of('ORPHAN_SECRET_E'))}],
     ['ordinary clean',[],async()=>{}],
     ['scanned PDF',[],scanPage],
@@ -35,17 +37,24 @@ function pixelDifference(a,b){assert.equal(a.length,b.length);let sum=0;for(let 
     ['unrelated content',['KEEP_COMMENT','KEEP_FORM_VALUE','KEEP_ACTION'],async p=>addUnrelated(p)],
     ['signed warning',[],async p=>{const signature=p.context.register(p.context.obj({Type:'Sig',ByteRange:[0,0,0,0]}));p.catalog.set(N('SignatureFixture'),signature)}],
   ];
-  for(const [name,secrets,edit] of cases){const pdf=await fixture();await edit(pdf);const inputBytes=new Uint8Array(await pdf.save({useObjectStreams:false,updateFieldAppearances:false})),file=new File([inputBytes.buffer],`${name}.pdf`,{type:'application/pdf'}),inputCopy=new Uint8Array(await file.arrayBuffer());
+  for(const [name,secrets,edit,visibleSecret=false] of cases){const pdf=await fixture();await edit(pdf);const inputBytes=new Uint8Array(await pdf.save({useObjectStreams:false,updateFieldAppearances:false})),file=new File([inputBytes.buffer],`${name}.pdf`,{type:'application/pdf'}),inputCopy=new Uint8Array(await file.arrayBuffer());
     const beforeRender=await render(pdfjs,inputBytes),result=await sanitizePdfMetadata(file,open),afterRender=await render(pdfjs,result.bytes);
     assert.deepEqual(new Uint8Array(await file.arrayBuffer()),inputCopy,`${name}: input changed`);assert.equal(result.verification.metadata,'verified-removed',`${name}: metadata verification`);assert.equal(result.verification.xmp,'verified-removed',`${name}: XMP verification`);assert.equal(result.verification.pageCountPreserved,true);assert.equal(result.verification.parseable,true);assert.equal(result.verification.remainingMetadataFindings,0);
     assert.deepEqual(afterRender.size,beforeRender.size);assert.equal(afterRender.rotation,beforeRender.rotation);assert.equal(afterRender.pageCount,beforeRender.pageCount);assert.equal(afterRender.text,beforeRender.text);assert.ok(pixelDifference(beforeRender.pixels,afterRender.pixels)<.01,`${name}: pixels changed`);
     if(name==='orphan metadata object')assert.ok(result.cleanup.removed>0,'orphan was not removed');
     if(name==='unrelated content'){for(const category of ['annotation','form','active-content'])assert.ok(result.after.findings.some(f=>f.category===category),`${category} removed`);assert.ok(result.after.findings.some(f=>f.category==='annotation'&&f.evidence?.summary==='KEEP_COMMENT'),'comment value changed');const preserved=await PDFDocument.load(result.bytes,{updateMetadata:false});assert.equal(preserved.getForm().getTextField('KeepField').getText(),'KEEP_FORM_VALUE');const action=preserved.context.lookup(preserved.catalog.get(N('OpenAction')),PDFDict);assert.equal(action.lookup(N('JS')).decodeText(),'KEEP_ACTION');}
     if(name==='signed warning')assert.ok(result.signed&&result.verification.warnings.some(v=>/signature/i.test(v)),'signature warning missing');
-    if(name!=='unrelated content')for(const secret of secrets)assert.ok(!serializedPdfContainsSecret(result.bytes,secret),`${name}: ${secret} survived`);
+    if(visibleSecret){for(const secret of secrets)assert.ok(afterRender.text.includes(secret),`${name}: visible ${secret} was removed`);assert.equal(serializedPdfMetadataResiduals(result.bytes,result.before.findings.filter(f=>f.category==='metadata').map(f=>({key:f.evidence.key,value:f.evidence.value}))).infoValues,0,`${name}: Info-context residual`)}
+    else if(name!=='unrelated content')for(const secret of secrets)assert.ok(!serializedPdfContainsSecret(result.bytes,secret),`${name}: ${secret} survived`);
     console.log(`PASS: ${name}; removed=${result.cleanup.removed}; pixels=${pixelDifference(beforeRender.pixels,afterRender.pixels).toFixed(4)}`);
   }
   const old=await fixture();old.setAuthor('OLD_INCREMENTAL_SECRET_F');const first=new Uint8Array(await old.save({useObjectStreams:false,updateFieldAppearances:false})),incremental=appendIncrementalInfo(first,'CURRENT_INCREMENTAL_SECRET_F'),incrementalFile=new File([incremental.buffer],'incremental.pdf',{type:'application/pdf'});assert.ok(serializedPdfContainsSecret(incremental,'OLD_INCREMENTAL_SECRET_F'));
   const result=await sanitizePdfMetadata(incrementalFile,open);assert.equal(result.verification.metadata,'verified-removed');assert.ok(!serializedPdfContainsSecret(result.bytes,'OLD_INCREMENTAL_SECRET_F'));assert.ok(!serializedPdfContainsSecret(result.bytes,'CURRENT_INCREMENTAL_SECRET_F'));assert.equal((Buffer.from(result.bytes).toString('latin1').match(/startxref/g)||[]).length,1,'output remained incremental');
   console.log('PASS: incremental history rewritten once; old and current revision secrets absent');
+  const residualSource=await fixture();residualSource.setAuthor('ORPHAN_SERIAL_SECRET_G');const residualSourceBytes=new Uint8Array(await residualSource.save({useObjectStreams:false,updateFieldAppearances:false})),residualFile=new File([residualSourceBytes.buffer],'residual-source.pdf',{type:'application/pdf'}),clean=await sanitizePdfMetadata(residualFile,open),tainted=concat(clean.bytes,encoder.encode('\n999 0 obj\n<< /Author (ORPHAN_SERIAL_SECRET_G) >>\nendobj\n')),before=await require('../lib/pdf/privacy-inspect.ts').inspectPdfPrivacy(residualFile,open),verification=await verifyMetadataSanitization(residualFile,tainted,before,open);
+  assert.equal(verification.inspection.findings.filter(f=>f.category==='metadata').length,0,'orphan fixture became structurally reachable');assert.equal(verification.verification.metadata,'removal-failed','orphan serialized Info residual incorrectly verified');assert.ok(verification.verification.warnings.some(value=>/Info context/.test(value)),'orphan residual warning missing');
+  console.log('PASS: orphan serialized Info residual fails context-aware verification');
+  const taintedXmp=concat(clean.bytes,encoder.encode('\n998 0 obj\n<< /Type /Metadata /Subtype /XML /Length 36 >>\nstream\n<x:xmpmeta>ORPHAN_XMP</x:xmpmeta>\nendstream\nendobj\n')),xmpVerification=await verifyMetadataSanitization(residualFile,taintedXmp,before,open);
+  assert.equal(xmpVerification.inspection.findings.filter(f=>f.category==='xmp').length,0,'orphan XMP fixture became structurally reachable');assert.equal(xmpVerification.verification.xmp,'removal-failed','orphan serialized XMP residual incorrectly verified');assert.ok(xmpVerification.verification.warnings.some(value=>/XMP metadata container/.test(value)),'orphan XMP warning missing');
+  console.log('PASS: orphan serialized XMP residual fails context-aware verification');
 })().catch(error=>{console.error(error);process.exitCode=1});

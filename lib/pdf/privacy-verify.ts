@@ -28,6 +28,40 @@ export function serializedPdfContainsSecret(bytes: Uint8Array, secret: string) {
   return includesBytes(bytes, utf8) || includesBytes(bytes, utf16) || includesBytes(lower, hex) || includesBytes(lower, utf16Hex);
 }
 
+type MetadataValue = { key: string; value: string };
+
+function latin1Text(bytes: Uint8Array) {
+  let text = "";
+  for (let start = 0; start < bytes.length; start += 16_384)
+    text += String.fromCharCode(...bytes.subarray(start, Math.min(start + 16_384, bytes.length)));
+  return text;
+}
+
+/** Restricts residual checks to serialized PDF object dictionaries, never page/content stream payloads. */
+export function serializedPdfMetadataResiduals(bytes: Uint8Array, values: MetadataValue[]) {
+  const text = latin1Text(bytes);
+  const blocks: Array<{ start: number; dictionaryEnd: number; dictionary: string }> = [];
+  const objectStart = /\b\d+\s+\d+\s+obj\b/g;
+  for (let match = objectStart.exec(text); match; match = objectStart.exec(text)) {
+    const end = text.indexOf("endobj", objectStart.lastIndex);
+    if (end < 0) break;
+    const objectText = text.slice(match.index, end);
+    const stream = objectText.search(/\bstream(?:\r\n|\r|\n)/);
+    const dictionaryEnd = match.index + (stream < 0 ? objectText.length : stream);
+    blocks.push({ start: match.index, dictionaryEnd, dictionary: text.slice(match.index, dictionaryEnd) });
+    objectStart.lastIndex = end + 6;
+  }
+  let infoValues = 0;
+  for (const { key, value } of values) {
+    const keyToken = PDFName.of(key).toString();
+    if (blocks.some(block => block.dictionary.includes(keyToken) &&
+      serializedPdfContainsSecret(bytes.subarray(block.start, block.dictionaryEnd), value))) infoValues++;
+  }
+  const xmpContainers = blocks.filter(block => /\/Type\s*\/Metadata\b/.test(block.dictionary) ||
+    (/\/Subtype\s*\/XML\b/.test(block.dictionary) && /\/Metadata\b/.test(block.dictionary))).length;
+  return { infoValues, xmpContainers };
+}
+
 export async function verifyMetadataSanitization(
   source: File,
   outputBytes: Uint8Array,
@@ -45,15 +79,17 @@ export async function verifyMetadataSanitization(
     const metadataFindings = inspection.findings.filter(finding => finding.category === "metadata").length;
     const xmpFindings = inspection.findings.filter(finding => finding.category === "xmp").length;
     const values = before.findings.filter(finding => finding.category === "metadata")
-      .map(finding => finding.evidence?.value).filter((value): value is string => typeof value === "string" && value.length >= 4);
-    const byteMatches = values.filter(value => serializedPdfContainsSecret(outputBytes, value)).length;
+      .map(finding => ({ key: finding.evidence?.key, value: finding.evidence?.value }))
+      .filter((entry): entry is MetadataValue => typeof entry.key === "string" && typeof entry.value === "string" && entry.value.length >= 4);
+    const residuals = serializedPdfMetadataResiduals(outputBytes, values);
     if (reachability.unreachable.length) warnings.push(`${reachability.unreachable.length} unreachable output object(s) remain.`);
-    if (byteMatches) warnings.push(`${byteMatches} prior metadata value(s) remain in common serialized encodings.`);
+    if (residuals.infoValues) warnings.push(`${residuals.infoValues} prior metadata value(s) remain in serialized Info context.`);
+    if (residuals.xmpContainers) warnings.push(`${residuals.xmpContainers} serialized XMP metadata container(s) remain.`);
     const pageCountPreserved = parsed.getPageCount() === before.pageCount;
     if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
     return { inspection, verification: {
-      metadata: infoAbsent && metadataFindings === 0 && byteMatches === 0 && !reachability.unreachable.length ? "verified-removed" : "removal-failed",
-      xmp: xmpAbsent && xmpFindings === 0 && !reachability.unreachable.length ? "verified-removed" : "removal-failed",
+      metadata: infoAbsent && metadataFindings === 0 && residuals.infoValues === 0 && !reachability.unreachable.length ? "verified-removed" : "removal-failed",
+      xmp: xmpAbsent && xmpFindings === 0 && residuals.xmpContainers === 0 && !reachability.unreachable.length ? "verified-removed" : "removal-failed",
       pageCountPreserved, parseable: true, remainingMetadataFindings: metadataFindings + xmpFindings, warnings,
     } };
   } catch (error) {
