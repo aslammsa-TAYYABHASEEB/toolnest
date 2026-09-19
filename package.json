@@ -11,6 +11,7 @@
     "test:organize-pdf": "node scripts/test-organize-pdf.cjs",
     "test:image-ocr": "node scripts/test-image-ocr.cjs",
     "test:pdf-to-excel": "node scripts/test-pdf-to-excel.cjs",
+    "test:privacy-inspector": "node scripts/test-privacy-inspector.cjs",
     "test:searchable-pdf": "node scripts/test-searchable-pdf.cjs",
     "qa:pdf-to-word": "node scripts/pdf-word-qa.cjs",
     "indexnow:submit": "node scripts/submit-indexnow.mjs",

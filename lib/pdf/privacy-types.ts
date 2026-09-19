@@ -1,0 +1,36 @@
+export type PrivacyCategory =
+  | "metadata" | "xmp" | "attachment" | "active-content" | "annotation"
+  | "external-link" | "form" | "hidden-text" | "redaction-risk"
+  | "optional-content" | "thumbnail" | "image-metadata";
+
+export type PrivacyConcern = "high" | "review" | "informational";
+export type PrivacyConfidence = "high" | "medium" | "low";
+export type PrivacyRemoval = "supported-later" | "inspect-only" | "unsupported";
+export type PrivacyCoverageState = "inspected" | "inspection-only" | "partial" | "unsupported";
+
+export type PrivacyFinding = {
+  id: string;
+  category: PrivacyCategory;
+  title: string;
+  description: string;
+  concern: PrivacyConcern;
+  rationale: string;
+  confidence: PrivacyConfidence;
+  page?: number;
+  objectPath?: string;
+  objectRef?: string;
+  evidence?: Record<string, string | number | boolean>;
+  removal: PrivacyRemoval;
+  functionalityImpact?: string;
+  verificationMethod?: string;
+  technicalNotes?: string;
+};
+
+export type PrivacyCoverage = { category: PrivacyCategory; state: PrivacyCoverageState; note?: string };
+export type PrivacyInspection = {
+  pageCount: number;
+  findings: PrivacyFinding[];
+  coverage: PrivacyCoverage[];
+  limits: { fileBytes: number; objects: number; pages: number };
+  warnings: string[];
+};
