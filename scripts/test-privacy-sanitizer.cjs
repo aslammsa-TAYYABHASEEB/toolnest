@@ -1,0 +1,51 @@
+require('./pdf-word-loader.cjs');
+const assert=require('node:assert/strict');
+const Module=require('node:module'),path=require('node:path'),canvas=require('@napi-rs/canvas');
+const {PDFDict,PDFDocument,PDFName,PDFString,StandardFonts,rgb}=require('pdf-lib');
+const {pathToFileURL}=require('node:url');
+const resolve=Module._resolveFilename;
+Module._resolveFilename=function(id,...args){return resolve.call(this,id.startsWith('@/')?path.resolve(id.slice(2)):id,...args)};
+globalThis.DOMMatrix=canvas.DOMMatrix;globalThis.ImageData=canvas.ImageData;globalThis.Path2D=canvas.Path2D;
+Promise.try??=(callback,...args)=>Promise.resolve().then(()=>callback(...args));
+const {sanitizePdfMetadata}=require('../lib/pdf/privacy-sanitize.ts');
+const {serializedPdfContainsSecret}=require('../lib/pdf/privacy-verify.ts');
+const N=value=>PDFName.of(value),encoder=new TextEncoder();
+function concat(...values){const length=values.reduce((n,v)=>n+v.length,0),out=new Uint8Array(length);let at=0;for(const v of values){out.set(v,at);at+=v.length}return out}
+async function fixture(){const pdf=await PDFDocument.create({updateMetadata:false}),p=pdf.addPage([420,280]),font=await pdf.embedFont(StandardFonts.Helvetica);p.drawText('PUBLIC SEARCHABLE TEXT',{x:42,y:205,size:20,font});p.drawRectangle({x:35,y:40,width:350,height:200,borderColor:rgb(.1,.3,.65),borderWidth:2});return pdf}
+function setCustomInfo(pdf,key,value){pdf.setTitle('temporary');const info=pdf.context.lookup(pdf.context.trailerInfo.Info,PDFDict);info.set(N(key),PDFString.of(value));}
+function setXmp(pdf,secret){const body=`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><secret>${secret}</secret></rdf:RDF></x:xmpmeta>`;pdf.catalog.set(N('Metadata'),pdf.context.register(pdf.context.stream(body,{Type:'Metadata',Subtype:'XML'})));}
+async function scanPage(pdf){const surface=canvas.createCanvas(840,560),ctx=surface.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,840,560);ctx.fillStyle='black';ctx.font='bold 30px Arial';ctx.fillText('SCANNED CONTROL',80,100);ctx.font='22px Arial';ctx.fillText('The image pixels must remain unchanged.',80,160);const png=await pdf.embedPng(surface.toBuffer('image/png'));const p=pdf.getPage(0);p.drawImage(png,{x:0,y:0,width:420,height:280});}
+async function searchablePage(pdf){await scanPage(pdf);const font=await pdf.embedFont(StandardFonts.Helvetica),p=pdf.getPage(0);p.drawText('SCANNED CONTROL searchable layer',{x:40,y:220,size:12,font,opacity:.0001});}
+function addUnrelated(pdf){const p=pdf.getPage(0),note=pdf.context.register(pdf.context.obj({Type:'Annot',Subtype:'Text',Rect:[30,30,60,60],Contents:PDFString.of('KEEP_COMMENT')}));p.node.addAnnot(note);pdf.getForm().createTextField('KeepField').setText('KEEP_FORM_VALUE');pdf.catalog.set(N('OpenAction'),pdf.context.obj({S:'JavaScript',JS:PDFString.of('KEEP_ACTION')}));}
+function appendIncrementalInfo(bytes,secret){const text=Buffer.from(bytes).toString('latin1'),startMatches=[...text.matchAll(/startxref\s+(\d+)/g)],previous=Number(startMatches.at(-1)[1]);const tail=text.slice(previous),root=/\/Root\s+(\d+)\s+(\d+)\s+R/.exec(tail),size=/\/Size\s+(\d+)/.exec(tail);assert.ok(root&&size,'classic trailer required');const object=Number(size[1]),prefix=encoder.encode(`\n${object} 0 obj\n<< /Title (${secret}) >>\nendobj\n`),offset=bytes.length+prefix.length,xref=encoder.encode(`xref\n${object} 1\n${String(bytes.length+1).padStart(10,'0')} 00000 n \ntrailer\n<< /Size ${object+1} /Root ${root[1]} ${root[2]} R /Info ${object} 0 R /Prev ${previous} >>\nstartxref\n${offset}\n%%EOF\n`);return concat(bytes,prefix,xref)}
+async function render(pdfjs,bytes){const doc=await pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useWorkerFetch:false}).promise;try{const p=await doc.getPage(1),v=p.getViewport({scale:1.25}),surface=canvas.createCanvas(Math.ceil(v.width),Math.ceil(v.height)),ctx=surface.getContext('2d');await p.render({canvas:surface,canvasContext:ctx,viewport:v,background:'rgb(255,255,255)'}).promise;const pixels=ctx.getImageData(0,0,surface.width,surface.height).data,text=(await p.getTextContent()).items.map(item=>item.str).join(' ');return {pixels,text,size:[v.width,v.height],rotation:p.rotate,pageCount:doc.numPages}}finally{await doc.destroy()}}
+function pixelDifference(a,b){assert.equal(a.length,b.length);let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);return sum/a.length}
+
+(async()=>{const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');pdfjs.GlobalWorkerOptions.workerSrc=pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
+  const open=async file=>pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,useWorkerFetch:false}).promise;
+  const cases=[
+    ['standard Info',['STANDARD_SECRET_A'],async p=>{p.setTitle('STANDARD_SECRET_A');p.setAuthor('Author A');p.setSubject('Subject A');p.setKeywords(['Keyword A']);p.setCreator('Creator A');p.setProducer('Producer A');p.setCreationDate(new Date('2020-01-02'));p.setModificationDate(new Date('2021-02-03'));}],
+    ['custom Info',['CUSTOM_SECRET_B'],async p=>setCustomInfo(p,'PrivateCase','CUSTOM_SECRET_B')],
+    ['XMP',['XMP_SECRET_C'],async p=>setXmp(p,'XMP_SECRET_C')],
+    ['Info and XMP',['COMBINED_INFO_D','COMBINED_XMP_D'],async p=>{p.setAuthor('COMBINED_INFO_D');setXmp(p,'COMBINED_XMP_D')}],
+    ['orphan metadata object',['ORPHAN_SECRET_E'],async p=>{p.context.register(PDFString.of('ORPHAN_SECRET_E'))}],
+    ['ordinary clean',[],async()=>{}],
+    ['scanned PDF',[],scanPage],
+    ['ToolNest searchable PDF',[],searchablePage],
+    ['unrelated content',['KEEP_COMMENT','KEEP_FORM_VALUE','KEEP_ACTION'],async p=>addUnrelated(p)],
+    ['signed warning',[],async p=>{const signature=p.context.register(p.context.obj({Type:'Sig',ByteRange:[0,0,0,0]}));p.catalog.set(N('SignatureFixture'),signature)}],
+  ];
+  for(const [name,secrets,edit] of cases){const pdf=await fixture();await edit(pdf);const inputBytes=new Uint8Array(await pdf.save({useObjectStreams:false,updateFieldAppearances:false})),file=new File([inputBytes.buffer],`${name}.pdf`,{type:'application/pdf'}),inputCopy=new Uint8Array(await file.arrayBuffer());
+    const beforeRender=await render(pdfjs,inputBytes),result=await sanitizePdfMetadata(file,open),afterRender=await render(pdfjs,result.bytes);
+    assert.deepEqual(new Uint8Array(await file.arrayBuffer()),inputCopy,`${name}: input changed`);assert.equal(result.verification.metadata,'verified-removed',`${name}: metadata verification`);assert.equal(result.verification.xmp,'verified-removed',`${name}: XMP verification`);assert.equal(result.verification.pageCountPreserved,true);assert.equal(result.verification.parseable,true);assert.equal(result.verification.remainingMetadataFindings,0);
+    assert.deepEqual(afterRender.size,beforeRender.size);assert.equal(afterRender.rotation,beforeRender.rotation);assert.equal(afterRender.pageCount,beforeRender.pageCount);assert.equal(afterRender.text,beforeRender.text);assert.ok(pixelDifference(beforeRender.pixels,afterRender.pixels)<.01,`${name}: pixels changed`);
+    if(name==='orphan metadata object')assert.ok(result.cleanup.removed>0,'orphan was not removed');
+    if(name==='unrelated content'){for(const category of ['annotation','form','active-content'])assert.ok(result.after.findings.some(f=>f.category===category),`${category} removed`);assert.ok(result.after.findings.some(f=>f.category==='annotation'&&f.evidence?.summary==='KEEP_COMMENT'),'comment value changed');const preserved=await PDFDocument.load(result.bytes,{updateMetadata:false});assert.equal(preserved.getForm().getTextField('KeepField').getText(),'KEEP_FORM_VALUE');const action=preserved.context.lookup(preserved.catalog.get(N('OpenAction')),PDFDict);assert.equal(action.lookup(N('JS')).decodeText(),'KEEP_ACTION');}
+    if(name==='signed warning')assert.ok(result.signed&&result.verification.warnings.some(v=>/signature/i.test(v)),'signature warning missing');
+    if(name!=='unrelated content')for(const secret of secrets)assert.ok(!serializedPdfContainsSecret(result.bytes,secret),`${name}: ${secret} survived`);
+    console.log(`PASS: ${name}; removed=${result.cleanup.removed}; pixels=${pixelDifference(beforeRender.pixels,afterRender.pixels).toFixed(4)}`);
+  }
+  const old=await fixture();old.setAuthor('OLD_INCREMENTAL_SECRET_F');const first=new Uint8Array(await old.save({useObjectStreams:false,updateFieldAppearances:false})),incremental=appendIncrementalInfo(first,'CURRENT_INCREMENTAL_SECRET_F'),incrementalFile=new File([incremental.buffer],'incremental.pdf',{type:'application/pdf'});assert.ok(serializedPdfContainsSecret(incremental,'OLD_INCREMENTAL_SECRET_F'));
+  const result=await sanitizePdfMetadata(incrementalFile,open);assert.equal(result.verification.metadata,'verified-removed');assert.ok(!serializedPdfContainsSecret(result.bytes,'OLD_INCREMENTAL_SECRET_F'));assert.ok(!serializedPdfContainsSecret(result.bytes,'CURRENT_INCREMENTAL_SECRET_F'));assert.equal((Buffer.from(result.bytes).toString('latin1').match(/startxref/g)||[]).length,1,'output remained incremental');
+  console.log('PASS: incremental history rewritten once; old and current revision secrets absent');
+})().catch(error=>{console.error(error);process.exitCode=1});

@@ -34,3 +34,13 @@ export type PrivacyInspection = {
   limits: { fileBytes: number; objects: number; pages: number };
   warnings: string[];
 };
+
+export type PrivacyRemovalStatus = "verified-removed" | "removal-failed" | "could-not-verify";
+export type MetadataSanitizationVerification = {
+  metadata: PrivacyRemovalStatus;
+  xmp: PrivacyRemovalStatus;
+  pageCountPreserved: boolean;
+  parseable: boolean;
+  remainingMetadataFindings: number;
+  warnings: string[];
+};

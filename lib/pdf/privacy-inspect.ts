@@ -7,7 +7,7 @@ import { sourceTextPlacements } from "./searchable";
 import { inspectPdfObjects, pdfEntry, pdfEntryText, PRIVACY_LIMITS } from "./privacy-objects";
 import type { PrivacyCategory, PrivacyConcern, PrivacyCoverage, PrivacyFinding, PrivacyInspection } from "./privacy-types";
 
-type RendererOpener = (file: File) => Promise<PDFDocumentProxy>;
+export type PrivacyRendererOpener = (file: File) => Promise<PDFDocumentProxy>;
 const standardInfo = new Set(["Title", "Author", "Subject", "Keywords", "Creator", "Producer", "CreationDate", "ModDate", "Trapped"]);
 const commentTypes = new Set(["Text", "FreeText", "Highlight", "Underline", "Squiggly", "StrikeOut", "Stamp", "Ink", "Popup", "Caret", "Circle", "Square", "Line", "Polygon", "PolyLine"]);
 const allCategories: PrivacyCategory[] = ["metadata", "xmp", "attachment", "active-content", "annotation", "external-link", "form", "hidden-text", "redaction-risk", "optional-content", "thumbnail", "image-metadata"];
@@ -116,7 +116,7 @@ function structuralFindings(document: PDFDocument, findings: PrivacyFinding[], w
           verificationMethod: "Reinspect Info dictionary and serialized bytes." });
       }
     }
-    if (object instanceof PDFStream && pdfEntryText(dict, "Type") === "Metadata") {
+    if (object instanceof PDFStream && path === "trailer/Root/Metadata" && pdfEntryText(dict, "Type") === "Metadata") {
       addFinding(findings, { category: "xmp", title: "XMP metadata stream", description: "An XMP metadata stream is present.",
         concern: "review", rationale: "XMP can contain authorship, history, identifiers or custom fields.", confidence: "high",
         objectPath: path, objectRef: ref, evidence: { encodedBytes: object.getContentsSize() }, removal: "supported-later",
@@ -258,7 +258,7 @@ async function pageEvidence(renderer: PDFDocumentProxy, findings: PrivacyFinding
 }
 
 /** Read-only: neither the input File nor its PDF objects are saved or modified. */
-export async function inspectPdfPrivacy(file: File, openRenderer: RendererOpener = loadPdfRendererDocument): Promise<PrivacyInspection> {
+export async function inspectPdfPrivacy(file: File, openRenderer: PrivacyRendererOpener = loadPdfRendererDocument): Promise<PrivacyInspection> {
   if (file.size > PRIVACY_LIMITS.fileBytes) throw new PdfProcessingError("workload-too-large", "Choose a PDF smaller than 25 MB for private browser inspection.");
   const document = await loadPdfDocument(file);
   const pageCount = document.getPageCount();
