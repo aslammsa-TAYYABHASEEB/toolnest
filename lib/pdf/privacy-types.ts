@@ -62,3 +62,12 @@ export type ActiveActionSanitizationVerification = {
   remainingActiveContentStructures: number;
   warnings: string[];
 };
+
+export type AnnotationSanitizationVerification = {
+  annotations: PrivacyRemovalStatus;
+  pageCountPreserved: boolean;
+  parseable: boolean;
+  remainingCommentFindings: number;
+  remainingCommentStructures: number;
+  warnings: string[];
+};

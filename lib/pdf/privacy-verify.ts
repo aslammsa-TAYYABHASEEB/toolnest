@@ -1,8 +1,10 @@
 import { PDFName } from "pdf-lib";
 import { inspectPdfPrivacy, type PrivacyRendererOpener } from "./privacy-inspect";
 import { loadPdfDocument } from "./loading";
-import { activeActionStructureSummary, attachmentStructureSummary, pdfObjectReachability } from "./privacy-objects";
-import type { ActiveActionSanitizationVerification, AttachmentSanitizationVerification, MetadataSanitizationVerification, PrivacyInspection } from "./privacy-types";
+import { activeActionStructureSummary, annotationStructureSummary, attachmentStructureSummary,
+  pdfObjectReachability, REVIEW_ANNOTATION_SUBTYPES } from "./privacy-objects";
+import type { ActiveActionSanitizationVerification, AnnotationSanitizationVerification,
+  AttachmentSanitizationVerification, MetadataSanitizationVerification, PrivacyInspection } from "./privacy-types";
 
 const encoder = new TextEncoder();
 function includesBytes(haystack: Uint8Array, needle: Uint8Array) {
@@ -124,5 +126,40 @@ export async function verifyActiveActionSanitization(
     warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
     return { verification: { activeContent: "could-not-verify", pageCountPreserved: false, parseable: false,
       remainingActiveContentFindings: -1, remainingActiveContentStructures: -1, warnings } };
+  }
+}
+
+export async function verifyAnnotationSanitization(
+  source: File,
+  outputBytes: Uint8Array,
+  before: PrivacyInspection,
+  secrets: string[],
+  openRenderer?: PrivacyRendererOpener,
+): Promise<{ inspection?: PrivacyInspection; verification: AnnotationSanitizationVerification }> {
+  const warnings: string[] = [];
+  try {
+    const output = new File([outputBytes.slice().buffer as ArrayBuffer], source.name, { type: "application/pdf" });
+    const inspection = await inspectPdfPrivacy(output, openRenderer);
+    const parsed = await loadPdfDocument(output);
+    const reachability = pdfObjectReachability(parsed);
+    const structures = annotationStructureSummary(parsed);
+    const structureCount = structures.reviewAnnotations + structures.ambiguousAnnotations + structures.malformedAnnotationArrays;
+    const findings = inspection.findings.filter(finding => finding.category === "annotation" &&
+      typeof finding.evidence?.subtype === "string" && REVIEW_ANNOTATION_SUBTYPES.has(finding.evidence.subtype)).length;
+    const byteMatches = secrets.filter(value => serializedPdfContainsSecret(outputBytes, value)).length;
+    if (reachability.unreachable.length) warnings.push(`${reachability.unreachable.length} unreachable output object(s) remain.`);
+    if (structures.reviewAnnotations) warnings.push(`${structures.reviewAnnotations} supported review annotation(s) remain.`);
+    if (structures.ambiguousAnnotations || structures.malformedAnnotationArrays)
+      warnings.push("Unsupported or malformed annotation structures remain; comment removal could not be fully verified.");
+    if (byteMatches) warnings.push(`${byteMatches} prior comment/review value(s) remain in common serialized encodings.`);
+    const pageCountPreserved = parsed.getPageCount() === before.pageCount;
+    if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
+    return { inspection, verification: { annotations: findings === 0 && structureCount === 0 && byteMatches === 0 &&
+      !reachability.unreachable.length ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
+      remainingCommentFindings: findings, remainingCommentStructures: structureCount, warnings } };
+  } catch (error) {
+    warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
+    return { verification: { annotations: "could-not-verify", pageCountPreserved: false, parseable: false,
+      remainingCommentFindings: -1, remainingCommentStructures: -1, warnings } };
   }
 }

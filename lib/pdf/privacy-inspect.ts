@@ -90,8 +90,10 @@ function structuralFindings(document: PDFDocument, findings: PrivacyFinding[], w
   const pageByNode = new Map<PDFDict, number>();
   document.getPages().forEach((page, index) => {
     pageByNode.set(page.node, index + 1);
-    const annots = page.node.Annots();
-    if (annots) for (let n = 0; n < annots.size(); n++) {
+    const rawAnnots = page.node.get(PDFName.of("Annots"));
+    const annots = rawAnnots instanceof PDFRef ? document.context.lookup(rawAnnots) : rawAnnots;
+    if (rawAnnots && !(annots instanceof PDFArray)) warnings.push(`Page ${index + 1} has a malformed annotation array.`);
+    if (annots instanceof PDFArray) for (let n = 0; n < annots.size(); n++) {
       const entry = annots.get(n);
       if (entry instanceof PDFRef) pageByAnnotation.set(entry.toString(), index + 1);
     }

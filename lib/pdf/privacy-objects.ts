@@ -177,6 +177,88 @@ export function activeActionSecretValues(document: PDFDocument) {
   return [...values];
 }
 
+export const REVIEW_ANNOTATION_SUBTYPES = new Set([
+  "Text", "FreeText", "Highlight", "Underline", "StrikeOut", "Squiggly", "Stamp", "Ink",
+  "Caret", "Circle", "Square", "Line", "Polygon", "PolyLine", "Popup",
+]);
+const PRESERVED_ANNOTATION_SUBTYPES = new Set([
+  "Link", "Widget", "FileAttachment", "Screen", "Movie", "Sound", "PrinterMark", "TrapNet",
+  "Watermark", "3D", "RichMedia", "Redact", "Projection",
+]);
+
+function pageAnnotationDictionaries(document: PDFDocument) {
+  const dictionaries = new Set<PDFDict>();
+  let malformedArrays = 0;
+  for (const page of document.getPages()) {
+    const raw = page.node.get(PDFName.of("Annots"));
+    if (!raw) continue;
+    const resolved = resolvedObject(document, raw);
+    if (!(resolved instanceof PDFArray)) { malformedArrays++; continue; }
+    for (let index = 0; index < resolved.size(); index++) {
+      const annotation = resolvedObject(document, resolved.get(index));
+      if (annotation instanceof PDFDict) dictionaries.add(annotation);
+    }
+  }
+  return { dictionaries, malformedArrays };
+}
+
+export function annotationStructureSummary(document: PDFDocument) {
+  const pages = pageAnnotationDictionaries(document);
+  const summary = { reviewAnnotations: 0, popupAnnotations: 0, ambiguousAnnotations: 0,
+    malformedAnnotationArrays: pages.malformedArrays, preservedAnnotations: 0 };
+  const seen = new WeakSet<PDFDict>();
+  const inspect = (dict: PDFDict) => {
+    if (seen.has(dict)) return;
+    seen.add(dict);
+    if (pdfEntryText(dict, "Type") !== "Annot" && !pages.dictionaries.has(dict)) return;
+    const subtype = pdfEntryText(dict, "Subtype");
+    if (subtype && REVIEW_ANNOTATION_SUBTYPES.has(subtype)) {
+      summary.reviewAnnotations++;
+      if (subtype === "Popup") summary.popupAnnotations++;
+    } else if (subtype && PRESERVED_ANNOTATION_SUBTYPES.has(subtype)) summary.preservedAnnotations++;
+    else summary.ambiguousAnnotations++;
+  };
+  inspectPdfObjects(document, ({ object }) => inspect(object instanceof PDFStream ? object.dict : object));
+  for (const dict of pages.dictionaries) inspect(dict);
+  return summary;
+}
+
+export function annotationSecretValues(document: PDFDocument) {
+  const values = new Set<string>(), seenValues = new WeakSet<object>(), seenAnnotations = new WeakSet<PDFDict>();
+  const collect = (value: unknown, depth = 0) => {
+    if (depth > 3) return;
+    const resolved = resolvedObject(document, value);
+    if (!resolved || typeof resolved !== "object" || seenValues.has(resolved)) return;
+    seenValues.add(resolved);
+    if (resolved instanceof PDFString || resolved instanceof PDFHexString) {
+      const text = resolved.decodeText().slice(0, 1024);
+      if (text.length >= 4) values.add(text);
+    } else if (resolved instanceof PDFStream) {
+      if (resolved.getContentsSize() <= PRIVACY_LIMITS.streamBytes) {
+        const text = new TextDecoder().decode(resolved.getContents().slice(0, 4096));
+        if (text.length >= 4) values.add(text);
+      }
+    } else if (resolved instanceof PDFDict) for (const [, child] of resolved.entries()) collect(child, depth + 1);
+  };
+  const inspect = (dict: PDFDict) => {
+    if (seenAnnotations.has(dict)) return;
+    seenAnnotations.add(dict);
+    const subtype = pdfEntryText(dict, "Subtype");
+    if (subtype && PRESERVED_ANNOTATION_SUBTYPES.has(subtype)) return;
+    const commentLike = Boolean(subtype && REVIEW_ANNOTATION_SUBTYPES.has(subtype)) ||
+      ["Contents", "T", "Subj", "IRT", "Popup", "RC"].some(key => dict.has(PDFName.of(key)));
+    if (!commentLike) return;
+    for (const key of ["Contents", "T", "Subj", "RC", "NM", "AP"]) {
+      const value = dict.get(PDFName.of(key));
+      if (value) collect(value);
+    }
+  };
+  inspectPdfObjects(document, ({ object }) => inspect(object instanceof PDFStream ? object.dict : object));
+  for (const [, object] of document.context.enumerateIndirectObjects())
+    if (object instanceof PDFDict) inspect(object);
+  return [...values];
+}
+
 export function pdfValue(value: unknown, max = 160): string | undefined {
   if (value instanceof PDFString || value instanceof PDFHexString) return value.decodeText().slice(0, max);
   if (value instanceof PDFName) return value.asString().slice(1, max + 1);
