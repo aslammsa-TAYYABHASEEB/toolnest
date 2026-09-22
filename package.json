@@ -12,6 +12,8 @@
     "test:image-ocr": "node scripts/test-image-ocr.cjs",
     "test:pdf-to-excel": "node scripts/test-pdf-to-excel.cjs",
     "test:pdf-renderer-security": "node scripts/test-pdf-renderer-security.cjs",
+    "test:csp": "node scripts/test-csp-config.cjs",
+    "test:csp-browser": "node scripts/test-csp-browser.cjs",
     "test:privacy-inspector": "node scripts/test-privacy-inspector.cjs",
     "test:privacy-sanitizer": "node scripts/test-privacy-sanitizer.cjs",
     "test:privacy-attachments": "node scripts/test-privacy-attachments.cjs",
