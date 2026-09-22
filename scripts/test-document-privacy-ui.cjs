@@ -17,7 +17,7 @@ Promise.try ??= (callback, ...args) => Promise.resolve().then(() => callback(...
 const N = value => PDFName.of(value);
 const { inspectPdfPrivacy } = require('../lib/pdf/privacy-inspect.ts');
 const { groupPrivacyFindings, quickCleanSelection, makeSanitizedPrivacyFilename, runPrivacySanitization } = require('../lib/pdf/privacy-workflow.ts');
-const { sanitizePdfMetadata, sanitizePdfAttachments, sanitizePdfActiveActions, sanitizePdfReviewAnnotations } = require('../lib/pdf/privacy-sanitize.ts');
+const { sanitizePdfMetadata, sanitizePdfAttachments, sanitizePdfActiveActions, sanitizePdfReviewAnnotations, sanitizePdfExternalLinks } = require('../lib/pdf/privacy-sanitize.ts');
 let openRenderer;
 
 async function fixture(edit = async () => {}) {
@@ -49,7 +49,7 @@ async function inspectCase(name, edit, check) {
   const actualOperations = {
     metadata: file => sanitizePdfMetadata(file, openRenderer), attachments: file => sanitizePdfAttachments(file, openRenderer),
     activeContent: file => sanitizePdfActiveActions(file, openRenderer), comments: file => sanitizePdfReviewAnnotations(file, openRenderer),
-    inspect: file => inspectPdfPrivacy(file, openRenderer),
+    externalLinks: file => sanitizePdfExternalLinks(file, openRenderer), inspect: file => inspectPdfPrivacy(file, openRenderer),
   };
   await inspectCase('1 clean PDF', async () => {}, async (result, groups) => {
     assert.equal(result.signed, false);
@@ -57,7 +57,7 @@ async function inspectCase(name, edit, check) {
   });
   await inspectCase('2 metadata-only PDF', async pdf => pdf.setAuthor('PRIVATE AUTHOR'), async (result, groups) => {
     assert.ok(groups.find(group => group.key === 'metadata').findings.length > 0);
-    assert.deepEqual(quickCleanSelection(result), { metadata: true, attachments: false, activeContent: false, comments: false });
+    assert.deepEqual(quickCleanSelection(result), { metadata: true, attachments: false, activeContent: false, comments: false, externalLinks: false });
   });
   await inspectCase('3 attachment PDF', async pdf => pdf.attach(new Uint8Array([1, 2, 3]), 'private.txt', { mimeType: 'text/plain' }), async (result, groups) => {
     assert.ok(groups.find(group => group.key === 'attachments').findings.length > 0);
@@ -74,7 +74,7 @@ async function inspectCase(name, edit, check) {
   await inspectCase('6 multiple supported categories', async (pdf, page) => {
     pdf.setAuthor('PRIVATE AUTHOR'); await pdf.attach(new Uint8Array([4]), 'private.txt');
     pdf.catalog.set(N('OpenAction'), pdf.context.obj({ S: 'Launch', F: PDFString.of('private.exe') })); comment(pdf, page);
-  }, async result => assert.deepEqual(quickCleanSelection(result), { metadata: true, attachments: true, activeContent: true, comments: false }));
+  }, async result => assert.deepEqual(quickCleanSelection(result), { metadata: true, attachments: true, activeContent: true, comments: false, externalLinks: false }));
   await inspectCase('7 inspection-only form finding', async (pdf, page) => {
     const field = pdf.getForm().createTextField('PrivateField'); field.setText('PRIVATE VALUE'); field.addToPage(page, { x: 40, y: 110, width: 140, height: 28 });
   }, async (_result, groups) => {
@@ -96,15 +96,32 @@ async function inspectCase(name, edit, check) {
     const signature = pdf.context.register(pdf.context.obj({ Type: 'Sig', ByteRange: [0, 0, 0, 0] })); pdf.catalog.set(N('SignatureFixture'), signature);
   }, async result => assert.equal(result.signed, true));
 
+  const linked = await fixture(async (pdf, page) => {
+    const uriAction = pdf.context.obj({ S: 'URI', URI: PDFString.of('https://example.test/private') });
+    const annotation = pdf.context.register(pdf.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [35, 35, 180, 60], A: uriAction }));
+    page.node.addAnnot(annotation);
+    pdf.catalog.set(N('OpenAction'), pdf.context.obj({ S: 'GoTo', D: [page.ref, 'Fit'] }));
+  });
+  const linkedInspection = await inspectPdfPrivacy(linked, openRenderer);
+  assert.ok(groupPrivacyFindings(linkedInspection).find(group => group.key === 'externalLinks').findings.length > 0);
+  assert.equal(quickCleanSelection(linkedInspection).externalLinks, false);
+  const linkedResult = await runPrivacySanitization(linked,
+    { metadata: false, attachments: false, activeContent: false, comments: false, externalLinks: true }, undefined, actualOperations);
+  assert.equal(linkedResult.steps[0].status, 'verified-removed');
+  assert.equal(groupPrivacyFindings(linkedResult.inspection).find(group => group.key === 'externalLinks').findings.length, 0);
+  const linkedOutput = await PDFDocument.load(new Uint8Array(await linkedResult.blob.arrayBuffer()), { updateMetadata: false });
+  assert.equal(linkedOutput.catalog.get(N('OpenAction')).get(N('S')).asString(), '/GoTo');
+  assert.ok(linkedOutput.getPages()[0].node.Annots().size() > 0, 'visible Link annotation should remain');
+  console.log('PASS: external URI is explicit opt-in, verified removed, and internal GoTo/Link annotation remain');
   await assert.rejects(() => inspectPdfPrivacy(new File([new Uint8Array([1, 2, 3])], 'broken.pdf', { type: 'application/pdf' }), openRenderer));
   console.log('PASS: 11 malformed/unsupported PDF');
 
   const mockInspection = { pageCount: 1, signed: false, findings: [], coverage: [], limits: { fileBytes: 1, objects: 1, pages: 200 }, warnings: [] };
   const failed = await runPrivacySanitization(new File([new Uint8Array([1])], 'failure.pdf', { type: 'application/pdf' }),
-    { metadata: true, attachments: false, activeContent: false, comments: false }, undefined, {
+    { metadata: true, attachments: false, activeContent: false, comments: false, externalLinks: false }, undefined, {
       metadata: async file => ({ blob: file.slice(), bytes: new Uint8Array(await file.arrayBuffer()), signed: false, before: mockInspection, after: mockInspection,
         verification: { metadata: 'removal-failed', xmp: 'verified-removed', pageCountPreserved: true, parseable: true, remainingMetadataFindings: 1, warnings: ['fixture failure'] }, cleanup: { removed: 0 } }),
-      attachments: async () => { throw new Error('not selected'); }, activeContent: async () => { throw new Error('not selected'); }, comments: async () => { throw new Error('not selected'); }, inspect: async () => mockInspection,
+      attachments: async () => { throw new Error('not selected'); }, activeContent: async () => { throw new Error('not selected'); }, comments: async () => { throw new Error('not selected'); }, externalLinks: async () => { throw new Error('not selected'); }, inspect: async () => mockInspection,
     });
   assert.equal(failed.steps[0].status, 'removal-failed'); assert.notEqual(failed.steps[0].status, 'verified-removed');
   console.log('PASS: 12 sanitization verification failure stays failed');
@@ -113,7 +130,7 @@ async function inspectCase(name, edit, check) {
     pdf.setAuthor('PRIVATE AUTHOR'); await pdf.attach(new Uint8Array([7, 8, 9]), 'private.txt', { mimeType: 'text/plain' });
     pdf.catalog.set(N('OpenAction'), pdf.context.obj({ S: 'JavaScript', JS: PDFString.of('secret()') })); comment(pdf, page, 'PRIVATE COMMENT');
   });
-  const completed = await runPrivacySanitization(full, { metadata: true, attachments: true, activeContent: true, comments: true }, undefined, actualOperations);
+  const completed = await runPrivacySanitization(full, { metadata: true, attachments: true, activeContent: true, comments: true, externalLinks: false }, undefined, actualOperations);
   assert.equal(completed.filename, 'Client-report-2026-sanitized.pdf'); assert.equal(completed.blob.type, 'application/pdf'); assert.ok(completed.blob.size > 0);
   assert.ok(completed.steps.every(step => step.status === 'verified-removed'));
   const finalGroups = groupPrivacyFindings(completed.inspection); for (const key of ['metadata', 'attachments', 'activeContent', 'comments']) assert.equal(finalGroups.find(group => group.key === key).findings.length, 0, `${key} remained`);
@@ -124,11 +141,11 @@ async function inspectCase(name, edit, check) {
   const route = fs.readFileSync(path.resolve('app/tools/document-privacy/page.tsx'), 'utf8');
   const styles = fs.readFileSync(path.resolve('app/globals.css'), 'utf8');
   const site = fs.readFileSync(path.resolve('lib/site.ts'), 'utf8');
-  for (const phrase of ['Sanitize Selected', 'Select Quick Clean', 'Digital signature warning', 'Inspection only · no removal control', 'Download sanitized PDF', 'What ToolNest checked']) assert.ok(component.includes(phrase), `missing UI phrase: ${phrase}`);
-  assert.ok(component.includes('comments: false') || fs.readFileSync(path.resolve('lib/pdf/privacy-workflow.ts'), 'utf8').includes('comments: false'));
-  assert.ok(route.includes('alternates: { canonical: "/tools/document-privacy" }')); assert.ok(route.includes('FAQPage'));
-  assert.ok(site.includes('href: "/tools/document-privacy"')); assert.ok(site.includes('pdf privacy checker'));
+  for (const phrase of ['Create sanitized copy', 'Use Recommended Clean', 'Digital signature warning', 'Review only · no automatic removal', 'Download sanitized PDF', 'What ToolNest checked', 'External links']) assert.ok(component.includes(phrase), `missing UI phrase: ${phrase}`);
+  const workflowSource = fs.readFileSync(path.resolve('lib/pdf/privacy-workflow.ts'), 'utf8'); assert.ok(workflowSource.includes('comments: false, externalLinks: false'));
+  assert.ok(route.includes('alternates: { canonical: "/tools/document-privacy" }')); assert.ok(route.includes('FAQPage')); assert.ok(route.includes('PDF Sanitizer & Privacy Checker'));
+  assert.ok(site.includes('href: "/tools/document-privacy"')); assert.ok(site.includes('pdf privacy checker')); assert.ok(site.includes('remove external links from pdf'));
   assert.ok(styles.includes('@media (min-width: 48rem)')); assert.ok(styles.includes('.privacy-category-grid'));
-  assert.ok(component.includes('processed locally') || component.includes('stays in this browser'));
+  assert.ok(component.includes('Runs in your browser') && component.includes('Original stays unchanged') && component.includes('No signup')); assert.ok(component.includes('Inspection is read-only.') && component.includes('Nothing will be removed yet.')); assert.ok(component.indexOf('privacy-category-grid') > component.indexOf('{inspection &&'));
   console.log('PASS: route, SEO, search/category/sitemap registry, privacy wording, and responsive source integration');
 })().catch(error => { console.error(error); process.exitCode = 1; });

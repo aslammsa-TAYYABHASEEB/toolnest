@@ -64,6 +64,15 @@ export type ActiveActionSanitizationVerification = {
   warnings: string[];
 };
 
+export type ExternalLinkSanitizationVerification = {
+  externalLinks: PrivacyRemovalStatus;
+  pageCountPreserved: boolean;
+  parseable: boolean;
+  remainingExternalLinkFindings: number;
+  remainingExternalLinkStructures: number;
+  warnings: string[];
+};
+
 export type AnnotationSanitizationVerification = {
   annotations: PrivacyRemovalStatus;
   pageCountPreserved: boolean;

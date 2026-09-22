@@ -18,6 +18,7 @@
     "test:privacy-sanitizer": "node scripts/test-privacy-sanitizer.cjs",
     "test:privacy-attachments": "node scripts/test-privacy-attachments.cjs",
     "test:privacy-actions": "node scripts/test-privacy-actions.cjs",
+    "test:privacy-links": "node scripts/test-privacy-links.cjs",
     "test:privacy-annotations": "node scripts/test-privacy-annotations.cjs",
     "test:document-privacy-ui": "node scripts/test-document-privacy-ui.cjs",
     "test:searchable-pdf": "node scripts/test-searchable-pdf.cjs",

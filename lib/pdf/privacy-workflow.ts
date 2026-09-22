@@ -3,6 +3,7 @@ import { REVIEW_ANNOTATION_SUBTYPES } from "./privacy-objects";
 import {
   sanitizePdfActiveActions,
   sanitizePdfAttachments,
+  sanitizePdfExternalLinks,
   sanitizePdfMetadata,
   sanitizePdfReviewAnnotations,
 } from "./privacy-sanitize";
@@ -13,9 +14,10 @@ export type PrivacySelection = {
   attachments: boolean;
   activeContent: boolean;
   comments: boolean;
+  externalLinks: boolean;
 };
 
-export type PrivacyGroupKey = keyof PrivacySelection | "externalLinks" | "forms" | "hiddenText" | "redactionRisk" | "layersOther";
+export type PrivacyGroupKey = keyof PrivacySelection | "forms" | "hiddenText" | "redactionRisk" | "layersOther";
 export type PrivacyGroup = {
   key: PrivacyGroupKey;
   title: string;
@@ -46,6 +48,7 @@ export const EMPTY_PRIVACY_SELECTION: PrivacySelection = {
   attachments: false,
   activeContent: false,
   comments: false,
+  externalLinks: false,
 };
 
 const dangerousActionTitles = new Set(["JavaScript action", "Launch action"]);
@@ -66,7 +69,7 @@ export function groupPrivacyFindings(inspection: PrivacyInspection): PrivacyGrou
       findings: matching(finding => finding.category === "active-content" && dangerousActionTitles.has(finding.title)) },
     { key: "comments", title: "Comments and review marks", description: "Review annotations such as notes, highlights, ink, stamps, and replies.", supported: true,
       findings: matching(isReviewComment) },
-    { key: "externalLinks", title: "External links", description: "Links are reported for review and are not removed in this version.", supported: false,
+    { key: "externalLinks", title: "External links", description: "External clickable links can be removed while internal page links are preserved.", supported: true,
       findings: matching(finding => finding.category === "external-link") },
     { key: "forms", title: "Forms", description: "Form structures and stored values are inspection-only in this version.", supported: false,
       findings: matching(finding => finding.category === "form" || (finding.category === "annotation" && finding.evidence?.subtype === "Widget")) },
@@ -84,7 +87,7 @@ export function quickCleanSelection(inspection: PrivacyInspection): PrivacySelec
   const groups = groupPrivacyFindings(inspection);
   const count = (key: PrivacyGroupKey) => groups.find(group => group.key === key)?.findings.length ?? 0;
   return { metadata: count("metadata") > 0, attachments: count("attachments") > 0,
-    activeContent: count("activeContent") > 0, comments: false };
+    activeContent: count("activeContent") > 0, comments: false, externalLinks: false };
 }
 
 export function makeSanitizedPrivacyFilename(name: string) {
@@ -97,6 +100,7 @@ type WorkflowOperations = {
   attachments: typeof sanitizePdfAttachments;
   activeContent: typeof sanitizePdfActiveActions;
   comments: typeof sanitizePdfReviewAnnotations;
+  externalLinks: typeof sanitizePdfExternalLinks;
   inspect: typeof inspectPdfPrivacy;
 };
 
@@ -105,6 +109,7 @@ const defaultOperations: WorkflowOperations = {
   attachments: sanitizePdfAttachments,
   activeContent: sanitizePdfActiveActions,
   comments: sanitizePdfReviewAnnotations,
+  externalLinks: sanitizePdfExternalLinks,
   inspect: inspectPdfPrivacy,
 };
 
@@ -130,7 +135,8 @@ export async function runPrivacySanitization(
   let signed = false;
   const steps: PrivacyStepResult[] = [];
   const titles: Record<keyof PrivacySelection, string> = {
-    metadata: "Metadata", attachments: "Embedded files", activeContent: "Active actions", comments: "Comments and review marks",
+    metadata: "Metadata & XMP", attachments: "Embedded files", activeContent: "JavaScript / Launch actions",
+    comments: "Comments and review marks", externalLinks: "External links",
   };
   for (let index = 0; index < queue.length; index++) {
     const key = queue[index];
@@ -141,7 +147,9 @@ export async function runPrivacySanitization(
     const statuses: PrivacyRemovalStatus[] = "metadata" in verification
       ? [verification.metadata, verification.xmp]
       : "attachments" in verification ? [verification.attachments]
-        : "activeContent" in verification ? [verification.activeContent] : [verification.annotations];
+        : "activeContent" in verification ? [verification.activeContent]
+          : "externalLinks" in verification ? [verification.externalLinks]
+            : [verification.annotations];
     steps.push({ key, title: titles[key], status: combinedStatus(statuses),
       beforeCount: groupCount(result.before, key), afterCount: groupCount(result.after, key), warnings: verification.warnings });
     current = new File([result.blob], makeSanitizedPrivacyFilename(source.name), { type: "application/pdf" });

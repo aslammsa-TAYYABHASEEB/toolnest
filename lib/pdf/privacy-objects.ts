@@ -177,6 +177,70 @@ export function activeActionSecretValues(document: PDFDocument) {
   return [...values];
 }
 
+export function isUriAction(document: PDFDocument, value: unknown) {
+  const resolved = resolvedObject(document, value);
+  return resolved instanceof PDFDict && pdfEntryText(resolved, "S") === "URI";
+}
+
+export function actionValueContainsUri(
+  document: PDFDocument,
+  value: unknown,
+  seenRefs = new Set<string>(),
+  seenDirect = new WeakSet<object>(),
+): boolean {
+  if (value instanceof PDFRef) {
+    const key = value.toString();
+    if (seenRefs.has(key)) return false;
+    seenRefs.add(key);
+    value = document.context.lookup(value);
+  } else if (value && typeof value === "object") {
+    if (seenDirect.has(value)) return false;
+    seenDirect.add(value);
+  }
+  if (value instanceof PDFArray) {
+    for (let index = 0; index < value.size(); index++)
+      if (actionValueContainsUri(document, value.get(index), seenRefs, seenDirect)) return true;
+    return false;
+  }
+  if (!(value instanceof PDFDict)) return false;
+  if (isUriAction(document, value)) return true;
+  const next = value.get(PDFName.of("Next"));
+  return next ? actionValueContainsUri(document, next, seenRefs, seenDirect) : false;
+}
+
+export function externalLinkStructureSummary(document: PDFDocument) {
+  const summary = { uriActions: 0, uriOpenActions: 0, uriActionEntries: 0,
+    uriAdditionalActions: 0, uriNextBranches: 0 };
+  inspectPdfObjects(document, ({ object, path }) => {
+    const dict = object instanceof PDFStream ? object.dict : object;
+    if (isUriAction(document, dict)) summary.uriActions++;
+    const openAction = path === "trailer/Root" ? dict.get(PDFName.of("OpenAction")) : undefined;
+    if (openAction && actionValueContainsUri(document, openAction)) summary.uriOpenActions++;
+    const action = dict.get(PDFName.of("A"));
+    if (action && actionValueContainsUri(document, action)) summary.uriActionEntries++;
+    const additional = resolvedObject(document, dict.get(PDFName.of("AA")));
+    if (additional instanceof PDFDict) for (const [, value] of additional.entries())
+      if (actionValueContainsUri(document, value)) summary.uriAdditionalActions++;
+    const next = dict.get(PDFName.of("Next"));
+    if (next && actionValueContainsUri(document, next)) summary.uriNextBranches++;
+  });
+  return summary;
+}
+
+export function externalLinkSecretValues(document: PDFDocument) {
+  const values = new Set<string>();
+  const collect = (object: PDFDict | PDFStream) => {
+    const dict = object instanceof PDFStream ? object.dict : object;
+    if (!isUriAction(document, dict)) return;
+    const target = pdfEntryText(dict, "URI", 1024);
+    if (target && target.length >= 4) values.add(target);
+  };
+  inspectPdfObjects(document, ({ object }) => collect(object));
+  for (const [, object] of document.context.enumerateIndirectObjects())
+    if (object instanceof PDFDict || object instanceof PDFStream) collect(object);
+  return [...values];
+}
+
 export const REVIEW_ANNOTATION_SUBTYPES = new Set([
   "Text", "FreeText", "Highlight", "Underline", "StrikeOut", "Squiggly", "Stamp", "Ink",
   "Caret", "Circle", "Square", "Line", "Polygon", "PolyLine", "Popup",

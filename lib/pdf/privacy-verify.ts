@@ -2,9 +2,10 @@ import { PDFDict, PDFName, PDFRef, PDFStream, type PDFDocument } from "pdf-lib";
 import { inspectPdfPrivacy, type PrivacyRendererOpener } from "./privacy-inspect";
 import { loadPdfDocument } from "./loading";
 import { activeActionStructureSummary, annotationStructureSummary, attachmentStructureSummary,
-  pdfObjectReachability, REVIEW_ANNOTATION_SUBTYPES } from "./privacy-objects";
+  externalLinkStructureSummary, pdfObjectReachability, REVIEW_ANNOTATION_SUBTYPES } from "./privacy-objects";
 import type { ActiveActionSanitizationVerification, AnnotationSanitizationVerification,
-  AttachmentSanitizationVerification, MetadataSanitizationVerification, PrivacyInspection } from "./privacy-types";
+  AttachmentSanitizationVerification, ExternalLinkSanitizationVerification,
+  MetadataSanitizationVerification, PrivacyInspection } from "./privacy-types";
 
 const encoder = new TextEncoder();
 function includesBytes(haystack: Uint8Array, needle: Uint8Array) {
@@ -178,6 +179,55 @@ export async function verifyActiveActionSanitization(
     warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
     return { verification: { activeContent: "could-not-verify", pageCountPreserved: false, parseable: false,
       remainingActiveContentFindings: -1, remainingActiveContentStructures: -1, warnings } };
+  }
+}
+
+export function serializedPdfUriResiduals(bytes: Uint8Array, secrets: string[]) {
+  const text = latin1Text(bytes);
+  const blocks: Array<{ start: number; dictionaryEnd: number; dictionary: string }> = [];
+  const objectStart = /\b\d+\s+\d+\s+obj\b/g;
+  for (let match = objectStart.exec(text); match; match = objectStart.exec(text)) {
+    const end = text.indexOf("endobj", objectStart.lastIndex);
+    if (end < 0) break;
+    const objectText = text.slice(match.index, end);
+    const stream = objectText.search(/\bstream(?:\r\n|\r|\n)/);
+    const dictionaryEnd = match.index + (stream < 0 ? objectText.length : stream);
+    blocks.push({ start: match.index, dictionaryEnd, dictionary: text.slice(match.index, dictionaryEnd) });
+    objectStart.lastIndex = end + 6;
+  }
+  return secrets.filter(secret => blocks.some(block => /\/S\s*\/URI\b/.test(block.dictionary) &&
+    serializedPdfContainsSecret(bytes.subarray(block.start, block.dictionaryEnd), secret))).length;
+}
+
+export async function verifyExternalLinkSanitization(
+  source: File,
+  outputBytes: Uint8Array,
+  before: PrivacyInspection,
+  secrets: string[],
+  openRenderer?: PrivacyRendererOpener,
+): Promise<{ inspection?: PrivacyInspection; verification: ExternalLinkSanitizationVerification }> {
+  const warnings: string[] = [];
+  try {
+    const output = new File([outputBytes.slice().buffer as ArrayBuffer], source.name, { type: "application/pdf" });
+    const inspection = await inspectPdfPrivacy(output, openRenderer);
+    const parsed = await loadPdfDocument(output);
+    const reachability = pdfObjectReachability(parsed);
+    const structures = externalLinkStructureSummary(parsed);
+    const structureCount = Object.values(structures).reduce((total, count) => total + count, 0);
+    const findings = inspection.findings.filter(finding => finding.category === "external-link").length;
+    const byteMatches = serializedPdfUriResiduals(outputBytes, secrets);
+    if (reachability.unreachable.length) warnings.push(`${reachability.unreachable.length} unreachable output object(s) remain.`);
+    if (structureCount) warnings.push(`${structureCount} reachable external-URI structure(s) remain.`);
+    if (byteMatches) warnings.push(`${byteMatches} prior URI target(s) remain in serialized URI-action context.`);
+    const pageCountPreserved = parsed.getPageCount() === before.pageCount;
+    if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
+    return { inspection, verification: { externalLinks: findings === 0 && structureCount === 0 && byteMatches === 0 &&
+      !reachability.unreachable.length ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
+      remainingExternalLinkFindings: findings, remainingExternalLinkStructures: structureCount, warnings } };
+  } catch (error) {
+    warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
+    return { verification: { externalLinks: "could-not-verify", pageCountPreserved: false, parseable: false,
+      remainingExternalLinkFindings: -1, remainingExternalLinkStructures: -1, warnings } };
   }
 }
 

@@ -1,10 +1,12 @@
-import { PDFArray, PDFDict, PDFName, PDFRef } from "pdf-lib";
+import { PDFArray, PDFDict, PDFName, PDFRef, type PDFObject } from "pdf-lib";
 import { PdfProcessingError } from "./errors";
 import { inspectPdfPrivacy, type PrivacyRendererOpener } from "./privacy-inspect";
 import { loadPdfDocument } from "./loading";
-import { activeActionSecretValues, annotationSecretValues, dangerousActionKind, inspectPdfObjects,
-  removeUnreachablePdfObjects, REVIEW_ANNOTATION_SUBTYPES } from "./privacy-objects";
-import { verifyActiveActionSanitization, verifyAnnotationSanitization, verifyAttachmentSanitization, verifyMetadataSanitization } from "./privacy-verify";
+import { actionValueContainsUri, activeActionSecretValues, annotationSecretValues, dangerousActionKind,
+  externalLinkSecretValues, inspectPdfObjects, isUriAction, removeUnreachablePdfObjects,
+  REVIEW_ANNOTATION_SUBTYPES } from "./privacy-objects";
+import { verifyActiveActionSanitization, verifyAnnotationSanitization, verifyAttachmentSanitization,
+  verifyExternalLinkSanitization, verifyMetadataSanitization } from "./privacy-verify";
 
 export const MAX_PRIVACY_SANITIZED_OUTPUT_SIZE = 100 * 1024 * 1024;
 
@@ -172,6 +174,83 @@ export async function sanitizePdfActiveActions(file: File, openRenderer?: Privac
   if (signed) warnings.unshift("This PDF contains a digital-signature structure. Creating a new sanitized file invalidates existing signatures.");
   return { blob: new Blob([bytes], { type: "application/pdf" }), bytes,
     filename: sanitizedFilename(file.name).replace("-metadata-removed.pdf", "-active-content-removed.pdf"), before,
+    after: verified.inspection, verification: { ...verified.verification, warnings }, references, cleanup, signed };
+}
+
+function removeExternalUriReferences(document: Awaited<ReturnType<typeof loadPdfDocument>>) {
+  let removedUriBranches = 0, preservedSafeBranches = 0, removedEmptyAdditionalActions = 0, removedEmptyNextEntries = 0;
+  const retain = (value: PDFObject, ancestors = new Set<object>()): PDFObject | undefined => {
+    if (!actionValueContainsUri(document, value)) return value;
+    const resolved = resolvedActionValue(document, value);
+    if (resolved instanceof PDFArray) {
+      if (ancestors.has(resolved)) return undefined;
+      const branch = new Set(ancestors).add(resolved);
+      for (let index = resolved.size() - 1; index >= 0; index--) {
+        const kept = retain(resolved.get(index), branch);
+        if (!kept) resolved.remove(index);
+        else if (kept !== resolved.get(index)) resolved.set(index, kept);
+      }
+      return resolved.size() ? value : undefined;
+    }
+    if (!(resolved instanceof PDFDict)) return value;
+    if (ancestors.has(resolved)) return undefined;
+    const branch = new Set(ancestors).add(resolved);
+    const next = resolved.get(PDFName.of("Next"));
+    if (isUriAction(document, resolved)) {
+      removedUriBranches++;
+      const promoted = next ? retain(next, branch) : undefined;
+      if (promoted) preservedSafeBranches++;
+      return promoted;
+    }
+    if (next) {
+      const kept = retain(next, branch);
+      if (!kept) { resolved.delete(PDFName.of("Next")); removedEmptyNextEntries++; }
+      else if (kept !== next) resolved.set(PDFName.of("Next"), kept);
+    }
+    return value;
+  };
+  const openAction = document.catalog.get(PDFName.of("OpenAction"));
+  if (openAction) {
+    const kept = retain(openAction);
+    if (!kept) document.catalog.delete(PDFName.of("OpenAction"));
+    else if (kept !== openAction) document.catalog.set(PDFName.of("OpenAction"), kept);
+  }
+  inspectPdfObjects(document, ({ object }) => {
+    const dict = object instanceof PDFDict ? object : object.dict;
+    const action = dict.get(PDFName.of("A"));
+    if (action) {
+      const kept = retain(action);
+      if (!kept) dict.delete(PDFName.of("A"));
+      else if (kept !== action) dict.set(PDFName.of("A"), kept);
+    }
+    const additional = resolvedActionValue(document, dict.get(PDFName.of("AA")));
+    if (!(additional instanceof PDFDict)) return;
+    for (const [event, value] of [...additional.entries()]) {
+      const kept = retain(value);
+      if (!kept) additional.delete(event);
+      else if (kept !== value) additional.set(event, kept);
+    }
+    if (!additional.keys().length) { dict.delete(PDFName.of("AA")); removedEmptyAdditionalActions++; }
+  });
+  return { removedUriBranches, preservedSafeBranches, removedEmptyAdditionalActions, removedEmptyNextEntries };
+}
+
+export async function sanitizePdfExternalLinks(file: File, openRenderer?: PrivacyRendererOpener) {
+  const before = await inspectPdfPrivacy(file, openRenderer);
+  const document = await loadPdfDocument(file);
+  const signed = documentHasSignature(document);
+  const secrets = externalLinkSecretValues(document);
+  const references = removeExternalUriReferences(document);
+  const cleanup = removeUnreachablePdfObjects(document);
+  const saved = await document.save({ useObjectStreams: true, addDefaultPage: false, updateFieldAppearances: false });
+  if (saved.length > MAX_PRIVACY_SANITIZED_OUTPUT_SIZE) throw new PdfProcessingError("workload-too-large", "The sanitized PDF exceeds the 100 MB output safety limit.");
+  const bytes = new Uint8Array(saved);
+  const verified = await verifyExternalLinkSanitization(file, bytes, before, secrets, openRenderer);
+  const warnings = [...verified.verification.warnings];
+  if (references.removedUriBranches) warnings.unshift("External clickable links were disabled. Internal page links and destinations were preserved.");
+  if (signed) warnings.unshift("This PDF contains a digital-signature structure. Creating a new sanitized file invalidates existing signatures.");
+  return { blob: new Blob([bytes], { type: "application/pdf" }), bytes,
+    filename: sanitizedFilename(file.name).replace("-metadata-removed.pdf", "-external-links-removed.pdf"), before,
     after: verified.inspection, verification: { ...verified.verification, warnings }, references, cleanup, signed };
 }
 

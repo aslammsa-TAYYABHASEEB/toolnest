@@ -21,7 +21,7 @@ import { usePdfDownload } from "@/lib/pdf/use-pdf-download";
 import { formatPdfBytes } from "@/lib/pdf/validation";
 
 type Status = "idle" | "ready" | "inspecting" | "inspected" | "sanitizing" | "complete" | "error";
-const supportedKeys = new Set<PrivacyGroupKey>(["metadata", "attachments", "activeContent", "comments"]);
+const supportedKeys = new Set<PrivacyGroupKey>(["metadata", "attachments", "activeContent", "comments", "externalLinks"]);
 
 function evidenceText(finding: PrivacyFinding) {
   return Object.entries(finding.evidence ?? {}).map(([key, value]) => `${key}: ${String(value)}`).join(" · ");
@@ -96,7 +96,7 @@ export function DocumentPrivacy() {
   function selectQuickClean() {
     if (!inspection) return;
     clearOutput(); setSelection(quickCleanSelection(inspection)); setCommentAcknowledged(false);
-    setMessage("Quick Clean selected metadata, embedded files, and dangerous active actions that were found. Comments remain unselected.");
+    setMessage("Recommended Clean selected detected metadata, embedded files, and dangerous active actions. Comments and external links remain unselected.");
   }
 
   async function sanitize() {
@@ -105,7 +105,7 @@ export function DocumentPrivacy() {
     try {
       const next = await runPrivacySanitization(source, selection, (key, completed, total) => {
         if (!alive.current) return;
-        const labels = { metadata: "Removing metadata and XMP", attachments: "Removing embedded files", activeContent: "Removing JavaScript and Launch actions", comments: "Removing comments and review marks", verifying: "Reinspecting the sanitized copy" };
+        const labels = { metadata: "Removing metadata and XMP", attachments: "Removing embedded files", activeContent: "Removing JavaScript and Launch actions", comments: "Removing comments and review marks", externalLinks: "Removing external URI actions", verifying: "Reinspecting the sanitized copy" };
         setMessage(`${labels[key]}… step ${completed + 1} of ${total}`);
       });
       if (!alive.current) return;
@@ -121,55 +121,57 @@ export function DocumentPrivacy() {
   const highCount = inspection?.findings.filter(finding => finding.concern === "high").length ?? 0;
   const reviewCount = inspection?.findings.filter(finding => finding.concern === "review").length ?? 0;
   const infoCount = inspection?.findings.filter(finding => finding.concern === "informational").length ?? 0;
+  const removableCount = groups.filter(group => group.supported && group.findings.length).length;
+  const reviewOnlyCount = groups.filter(group => !group.supported && group.findings.length).length;
   const remainingInspectOnly = result ? groupPrivacyFindings(result.inspection).filter(group => !group.supported && group.findings.length) : [];
   const verified = result?.steps.every(step => step.status === "verified-removed") ?? false;
 
   return <section className="document-privacy-shell" aria-labelledby="document-privacy-title">
     <h2 className="sr-only" id="document-privacy-title">Inspect and sanitize PDF privacy traces</h2>
-    <div className="privacy-banner"><span aria-hidden="true">✓</span><div><strong>Your PDF stays in this browser.</strong><p>Inspection and supported cleanup happen locally. No document is uploaded to ToolNest or a paid service.</p></div></div>
+    <div className="privacy-trust-row" aria-label="Privacy promises"><span>Runs in your browser</span><span>Original stays unchanged</span><span>No signup</span></div><p className="privacy-boundary">Not antivirus · Not a redaction tool</p>
     <PdfUploader inputRef={inputRef} busy={busy} compact={Boolean(source)} multiple={false} inputId="document-privacy-file"
-      heading="Drop one PDF to inspect" compactHeading="Replace PDF" buttonLabel={source ? "Choose another" : "Choose PDF"}
+      heading="Choose a PDF to check and sanitize" compactHeading="Selected PDF" buttonLabel={source ? "Choose another" : "Choose PDF"}
       helperText={`One PDF · ${formatPdfBytes(PRIVACY_LIMITS.fileBytes)} maximum · up to ${PRIVACY_LIMITS.pages} pages`} onSelect={choosePdf} />
 
     {source && <Card className="privacy-source-card">
       <div className="pdf-source-summary"><span className="pdf-file-icon is-visible" aria-hidden="true">PDF</span><span className="pdf-file-details"><strong title={source.name}>{source.name}</strong><small>{formatPdfBytes(source.size)} · source remains unchanged</small></span><Button variant="ghost" size="sm" onClick={() => inputRef.current?.click()} disabled={busy}>Replace</Button></div>
-      {!inspection && <><div className="pdf-safety-note"><strong>Read-only first step</strong><span>ToolNest inventories privacy-relevant structures before offering only the removals this version can verify.</span></div><div className="pdf-split-actions"><Button size="lg" disabled={busy} onClick={() => void inspect()}>{status === "inspecting" ? "Inspecting PDF…" : "Inspect PDF"}</Button><Button variant="ghost" disabled={busy} onClick={reset}>Reset</Button></div></>}
+      {!inspection && <><div className="pdf-safety-note"><strong>Inspection is read-only.</strong><span>Nothing will be removed yet. ToolNest checks privacy-relevant structures before offering supported removals.</span></div><div className="pdf-split-actions"><Button size="lg" disabled={busy} onClick={() => void inspect()}>{status === "inspecting" ? "Inspecting PDF…" : "Inspect PDF"}</Button><Button variant="ghost" disabled={busy} onClick={reset}>Reset</Button></div></>}
     </Card>}
 
     {inspection && <div className="privacy-results">
       <Card className="privacy-summary-card">
-        <div><span className="kicker">Inspection summary</span><h3>{inspection.findings.length ? `${inspection.findings.length} item${inspection.findings.length === 1 ? "" : "s"} to review` : "No reportable traces found"}</h3><p>{inspection.pageCount} page{inspection.pageCount === 1 ? "" : "s"} · {inspection.limits.objects.toLocaleString()} PDF objects inspected</p></div>
+        <div><span className="kicker">Inspection complete</span><h3>{inspection.findings.length ? `${inspection.findings.length} item${inspection.findings.length === 1 ? "" : "s"} found across ${groups.filter(group => group.findings.length).length} categor${groups.filter(group => group.findings.length).length === 1 ? "y" : "ies"}` : "No reportable traces found"}</h3><p>{removableCount} categor{removableCount === 1 ? "y" : "ies"} can be removed and verified · {reviewOnlyCount} need review</p><p>{inspection.pageCount} page{inspection.pageCount === 1 ? "" : "s"} · {inspection.limits.objects.toLocaleString()} PDF objects inspected</p></div>
         <div className="privacy-counts" aria-label="Finding levels"><span className="is-high"><strong>{highCount}</strong> important</span><span className="is-review"><strong>{reviewCount}</strong> review</span><span><strong>{infoCount}</strong> information</span></div>
       </Card>
 
       {inspection.signed && <div className="privacy-signature-warning" role="alert"><strong>Digital signature warning</strong><p>Creating a sanitized copy rewrites the PDF and invalidates existing digital signatures. Keep the original if signature validity matters.</p></div>}
 
-      <div className="privacy-workspace-heading"><div><span className="kicker">Choose what to remove</span><h3>Verified cleanup where supported</h3></div><Button variant="secondary" onClick={selectQuickClean} disabled={busy || status === "complete"}>Select Quick Clean</Button></div>
-      <p className="privacy-quick-note">Quick Clean selects metadata, embedded files, and dangerous JavaScript or Launch actions. It never selects comments or inspection-only findings.</p>
+      <Card className="privacy-recommended-card"><div><span className="kicker">Recommended Clean</span><h3>Remove common privacy traces</h3><p>Selects detected metadata, embedded files, and dangerous active actions. External links and comments always require an explicit choice.</p></div><div className="privacy-recommended-actions"><Button variant="secondary" onClick={selectQuickClean} disabled={busy || status === "complete"}>Use Recommended Clean</Button><Button variant="ghost" onClick={() => document.getElementById("privacy-removals")?.focus()} disabled={busy}>Customize removals</Button></div></Card><div className="privacy-workspace-heading" id="privacy-removals" tabIndex={-1}><div><span className="kicker">Customize removals</span><h3>Choose exactly what the new copy removes</h3></div></div>
+      <p className="privacy-quick-note">Recommended Clean is conservative: it never selects comments, external links, or inspection-only findings.</p>
 
       <div className="privacy-category-grid">{groups.map(group => {
         const key = group.key as keyof PrivacySelection;
         const selected = supportedKeys.has(group.key) ? selection[key] : false;
         return <Card key={group.key} className={`privacy-category-card${group.supported ? " is-supported" : " is-inspect-only"}${selected ? " is-selected" : ""}`}>
           <div className="privacy-category-head"><div><h4>{group.title}</h4><p>{group.description}</p></div><span className={group.findings.length ? "has-findings" : ""}>{group.findings.length}</span></div>
-          {group.supported ? <label className="privacy-remove-choice"><input type="checkbox" checked={selected} disabled={!group.findings.length || busy || status === "complete"} onChange={event => toggle(key, event.target.checked)} /><span><strong>{group.findings.length ? "Remove from sanitized copy" : "Nothing detected"}</strong><small>{group.key === "comments" ? "Optional and potentially destructive" : "Verified after the new copy is saved"}</small></span></label> : <p className="privacy-inspect-only">Inspection only · no removal control</p>}
-          {group.findings.length > 0 && <details className="privacy-finding-details"><summary>Review {group.findings.length} finding{group.findings.length === 1 ? "" : "s"}</summary><ul>{group.findings.map(finding => <li key={finding.id}><div><strong>{finding.title}</strong><span className={`privacy-concern is-${finding.concern}`}>{concernLabel(finding)}</span></div><p>{finding.description} {finding.rationale}</p>{finding.page && <small>Page {finding.page}</small>}{evidenceText(finding) && <small>{evidenceText(finding)}</small>}<details><summary>Technical details</summary><p>{finding.objectPath ? `Object path: ${finding.objectPath}. ` : ""}{finding.verificationMethod ?? "Reported for manual review."}{finding.technicalNotes ? ` ${finding.technicalNotes}` : ""}</p></details></li>)}</ul></details>}
+          {group.supported ? <label className="privacy-remove-choice"><input type="checkbox" checked={selected} disabled={!group.findings.length || busy || status === "complete"} onChange={event => toggle(key, event.target.checked)} /><span><strong>{group.findings.length ? (group.key === "comments" || group.key === "externalLinks" ? "Optional removal" : "Can remove and verify") : "Nothing detected"}</strong><small>{group.key === "comments" ? "May alter visible review markup" : group.key === "externalLinks" ? "External clickable links will stop working. Internal page links are preserved." : "Verified after the new copy is saved"}</small></span></label> : <p className="privacy-inspect-only">Review only · no automatic removal</p>}
+          {group.findings.length > 0 && <details className="privacy-finding-details"><summary>View {group.findings.length} finding{group.findings.length === 1 ? "" : "s"}</summary><ul>{group.findings.map(finding => <li key={finding.id}><div><strong>{finding.title}</strong><span className={`privacy-concern is-${finding.concern}`}>{concernLabel(finding)}</span></div><p>{finding.description} {finding.rationale}</p>{finding.page && <small>Page {finding.page}</small>}{evidenceText(finding) && <small>{evidenceText(finding)}</small>}<details><summary>Technical details</summary><p>{finding.objectPath ? `Object path: ${finding.objectPath}. ` : ""}{finding.verificationMethod ?? "Reported for manual review."}{finding.technicalNotes ? ` ${finding.technicalNotes}` : ""}</p></details></li>)}</ul></details>}
         </Card>;
       })}</div>
 
       {selection.comments && <label className="privacy-comment-warning"><input type="checkbox" checked={commentAcknowledged} onChange={event => setCommentAcknowledged(event.target.checked)} disabled={busy || status === "complete"} /><span><strong>Comments and review markup may be visible on the pages. Removing them can change how the PDF looks.</strong><small>I understand this is destructive. Notes, highlights, ink, stamps, replies, authors, dates, and appearance streams selected as review annotations will be removed. Ordinary links, forms, file attachments, and unsupported proprietary annotations are preserved.</small></span></label>}
 
-      {!result && <div className="privacy-action-bar"><div><strong>{chosen ? `${chosen} cleanup categor${chosen === 1 ? "y" : "ies"} selected` : "Choose a supported cleanup category"}</strong><small>A new file is created; the original is never overwritten.</small></div><Button size="lg" disabled={busy || !chosen || (selection.comments && !commentAcknowledged)} onClick={() => void sanitize()}>{status === "sanitizing" ? "Creating and verifying…" : "Sanitize Selected"}</Button><Button variant="ghost" disabled={busy} onClick={reset}>Start over</Button></div>}
+      {!result && <div className="privacy-action-bar"><div><strong>{chosen ? `${chosen} cleanup categor${chosen === 1 ? "y" : "ies"} selected` : "Choose a supported cleanup category"}</strong><small>A new file is created; the original is never overwritten.</small></div><Button size="lg" disabled={busy || !chosen || (selection.comments && !commentAcknowledged)} onClick={() => void sanitize()}>{status === "sanitizing" ? "Creating and verifying…" : "Create sanitized copy"}</Button><Button variant="ghost" disabled={busy} onClick={reset}>Start over</Button></div>}
     </div>}
 
     {result && download.download && <Card className={`privacy-verification-card${verified ? " is-verified" : " has-failure"}`} role="status">
       <div className="privacy-verification-head"><span aria-hidden="true">{verified ? "✓" : "!"}</span><div><strong>{verified ? "Selected removals verified" : "Verification needs attention"}</strong><p>{verified ? "The sanitized copy was parsed and reinspected after every selected cleanup." : "The copy was created, but ToolNest will not describe every selected removal as successful."}</p></div></div>
-      <ul>{result.steps.map(step => <li key={step.key}><span>{step.title}<small>Before: {step.beforeCount} · After: {step.afterCount}</small></span><strong className={`is-${step.status}`}>{step.status === "verified-removed" ? "Verified removed" : step.status === "removal-failed" ? "Removal failed" : "Could not verify"}</strong>{step.warnings.map(warning => <small key={warning}>{warning}</small>)}</li>)}</ul>
+      <ul>{result.steps.map(step => <li key={step.key}><span>{step.title}<small>{step.beforeCount} before → {step.afterCount} after</small></span><strong className={`is-${step.status}`}>{step.status === "verified-removed" ? "Verified removed" : step.status === "removal-failed" ? "Removal failed" : "Could not verify"}</strong>{step.warnings.map(warning => <small key={warning}>{warning}</small>)}</li>)}</ul>
       {remainingInspectOnly.length > 0 && <div className="privacy-remaining"><strong>Still requires manual review</strong><p>{remainingInspectOnly.map(group => `${group.title} (${group.findings.length})`).join(" · ")}</p></div>}
-      <div className="privacy-download-row"><a className={buttonClassName()} href={download.download.url} download={download.download.filename}>Download sanitized PDF</a><Button variant="secondary" onClick={reset}>Inspect another PDF</Button></div>
+      <p className="privacy-verification-boundary">The result verifies only the categories listed above. It is not a forensic or malware-safety certificate.</p><div className="privacy-download-row"><a className={buttonClassName()} href={download.download.url} download={download.download.filename}>Download sanitized PDF</a><Button variant="secondary" onClick={reset}>Check another PDF</Button></div>
     </Card>}
 
     <div className="pdf-status" aria-live="polite" aria-atomic="true">{message && <p>{message}</p>}{error && <p className="converter-error" role="alert"><strong>Couldn&apos;t finish this step.</strong> {error}</p>}</div>
-    <details className="privacy-coverage"><summary>What ToolNest checked</summary><div><p><strong>Supported inspection:</strong> document structures, pages, text evidence, metadata, attachments, actions, annotations, forms, links, layers, thumbnails, and limited image signals.</p><p><strong>Verified sanitization:</strong> metadata/XMP, embedded files, JavaScript/Launch actions, and selected review comments.</p><p><strong>Inspection only:</strong> forms, links, hidden text, possible fake redactions, optional layers, thumbnails, and image-level metadata signals.</p><p><strong>Known limits:</strong> this is not a forensic certificate. Encrypted, proprietary, ambiguous, and complex graphic structures may not be fully supported.</p></div></details>
+    <details className="privacy-coverage"><summary>What ToolNest checked</summary><div><p><strong>Supported inspection:</strong> document structures, pages, text evidence, metadata, attachments, actions, annotations, forms, links, layers, thumbnails, and limited image signals.</p><p><strong>Verified sanitization:</strong> metadata/XMP, embedded files, JavaScript/Launch actions, selected external URI actions, and selected review comments.</p><p><strong>Inspection only:</strong> forms, hidden text, possible fake redactions, optional layers, thumbnails, and image-level metadata signals.</p><p><strong>Known limits:</strong> this is not a forensic certificate. Encrypted, proprietary, ambiguous, and complex graphic structures may not be fully supported.</p></div></details>
   </section>;
 }
