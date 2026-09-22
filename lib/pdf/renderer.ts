@@ -46,11 +46,15 @@ export async function loadPdfRendererDocument(file: File) {
     const pdfjs = await import("pdfjs-dist");
     pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-    const loadingTask = pdfjs.getDocument({
+    const loadingOptions: Parameters<typeof pdfjs.getDocument>[0] & {
+      enableScripting: false;
+    } = {
       data: new Uint8Array(await file.arrayBuffer()),
+      enableScripting: false,
       isEvalSupported: false,
       useWorkerFetch: false,
-    });
+    };
+    const loadingTask = pdfjs.getDocument(loadingOptions);
     return await loadingTask.promise;
   } catch (caught) {
     throw rendererError(caught, file.name);
