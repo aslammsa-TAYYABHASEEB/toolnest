@@ -41,7 +41,7 @@ async function main() {
         tables:p.blocks.filter(b=>b.kind==='table').map(t=>({rows:t.rows.length,columns:t.edges.length-1,continuation:!!t.continuation,rowKeys:t.rows.map(r=>r[0].map(lineText).join(' '))})),
         readingOrder:p.blocks.map(b=>b.kind==='table'?`table (${b.rows.length} rows)`: `${b.kind}: ${b.lines.map(lineText).join(' ').slice(0,70)}`),
       }))},null,2));
-    } finally { await document.destroy(); }
+    } finally { await document.loadingTask.destroy(); }
   }
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

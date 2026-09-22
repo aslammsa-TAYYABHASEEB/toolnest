@@ -303,6 +303,6 @@ async function compressRasterized(
       "The PDF could not be compressed. Try another file.",
     );
   } finally {
-    await documentProxy.destroy();
+    await documentProxy.loadingTask.destroy();
   }
 }

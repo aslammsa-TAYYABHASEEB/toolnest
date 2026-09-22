@@ -11,4 +11,10 @@ assert.match(source, /useWorkerFetch:\s*false/, "PDF.js worker fetching must rem
 assert.equal((source.match(/pdfjs\.getDocument\s*\(/g) || []).length, 1,
   "The centralized production renderer must have exactly one PDF.js document-opening call");
 
-console.log("PASS: production PDF.js loader disables scripting and dynamic evaluation");
+const pdfjsRoot = path.dirname(require.resolve("pdfjs-dist/package.json"));
+const installedWorker = fs.readFileSync(path.join(pdfjsRoot, "build", "pdf.worker.min.mjs"));
+const publicWorker = fs.readFileSync(path.join(__dirname, "..", "public", "pdf.worker.min.mjs"));
+assert.deepEqual(publicWorker, installedWorker,
+  "The public PDF.js worker must exactly match the installed package worker");
+
+console.log("PASS: production PDF.js loader is hardened and its public worker matches the installed package");

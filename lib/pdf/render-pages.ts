@@ -153,6 +153,6 @@ export async function renderPdfPages(
         : "The browser could not finish rendering the selected pages.",
     );
   } finally {
-    await documentProxy.destroy();
+    await documentProxy.loadingTask.destroy();
   }
 }

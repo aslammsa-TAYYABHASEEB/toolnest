@@ -48,6 +48,7 @@ export async function loadPdfRendererDocument(file: File) {
 
     const loadingOptions: Parameters<typeof pdfjs.getDocument>[0] & {
       enableScripting: false;
+      isEvalSupported: false;
     } = {
       data: new Uint8Array(await file.arrayBuffer()),
       enableScripting: false,
@@ -99,7 +100,7 @@ export async function readRenderablePdfMetadata(
   } catch (caught) {
     throw rendererError(caught, file.name);
   } finally {
-    await document.destroy();
+    await document.loadingTask.destroy();
   }
 }
 

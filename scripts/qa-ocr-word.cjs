@@ -31,7 +31,7 @@ const out=path.resolve('work/ocr-word-qa');
         page.cleanup();
       }
       fs.writeFileSync(cache,JSON.stringify(pages));
-    } finally {await worker.terminate();await pdf.destroy();}
+    } finally {await worker.terminate();await pdf.loadingTask.destroy();}
   }
   const {recognitionLines,buildOcrWordPage,finalizeOcrPages,decorativeBand,fitOcrText}=require('../lib/pdf/ocr-word-layout.ts');
   const {createWordDocument}=require('../lib/pdf/word-document.ts');
@@ -49,7 +49,7 @@ const out=path.resolve('work/ocr-word-qa');
         const crop=createCanvas(p.pixelWidth,Math.ceil(band));crop.getContext('2d').drawImage(canvas,0,0);
         result.blocks.unshift({kind:'image',x:0,right:p.width,y:0,bottom:band/p.pixelHeight*p.height,data:new Uint8Array(crop.toBuffer('image/png'))});
         result.left=0;result.right=p.width;result.top=0;
-      } finally {await pdf.destroy();}
+      } finally {await pdf.loadingTask.destroy();}
     }
     const ctx=createCanvas(1,1).getContext('2d');
     fitOcrText(result,(text,size,bold)=>{ctx.font=`${bold?'bold ':''}${size}px Arial`;return ctx.measureText(text).width;});

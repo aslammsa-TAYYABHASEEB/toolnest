@@ -602,6 +602,6 @@ export async function createSearchablePdf(
     throw new PdfProcessingError("searchable-pdf-failed", caught instanceof Error ? caught.message : "The searchable PDF could not be created.");
   } finally {
     if (engine) await engine.terminate();
-    await renderer.destroy();
+    await renderer.loadingTask.destroy();
   }
 }

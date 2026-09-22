@@ -284,7 +284,7 @@ export async function inspectPdfPrivacy(file: File, openRenderer: PrivacyRendere
       }
     } catch { warnings.push("XMP field decoding was unavailable; structural metadata presence was still inspected."); }
     await pageEvidence(renderer, findings, warnings);
-  } finally { await renderer.destroy(); }
+  } finally { await renderer.loadingTask.destroy(); }
   const coverage: PrivacyCoverage[] = allCategories.map(category => ({ category,
     state: category === "redaction-risk" || category === "image-metadata" || category === "xmp" ? "partial" : inspectOnly.has(category) ? "inspection-only" : "inspected",
     ...(category === "redaction-risk" ? { note: "Complex graphic masking cannot be ruled out; no absence-of-leak guarantee." } : {}),

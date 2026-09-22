@@ -106,6 +106,6 @@ export async function renderPdfRotationThumbnails(file: File, requestedPages?: n
       "The browser could not finish the page thumbnails.",
     );
   } finally {
-    await documentProxy.destroy();
+    await documentProxy.loadingTask.destroy();
   }
 }

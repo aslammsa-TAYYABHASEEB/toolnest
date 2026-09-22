@@ -55,7 +55,7 @@ async function fixture(name, count) {
     assert.ok(ops.fnArray.includes(pdfjs.OPS.constructPath));
     assert.ok(!ops.fnArray.includes(pdfjs.OPS.paintImageXObject));
   }
-  await read.destroy();
+  await read.loadingTask.destroy();
   assert.deepEqual(labels,['ORGANIZER-A PAGE 2','ORGANIZER-A PAGE 2','ORGANIZER-A PAGE 4','ORGANIZER-B PAGE 1','ORGANIZER-B PAGE 2','ORGANIZER-A PAGE 5','ORGANIZER-A PAGE 1']);
   const extracted=await organizer.exportOrganizedPdf([sa,sb],pages.filter(p=>[duplicate.id,added[1].id,original[0].id].includes(p.id)),true);
   fs.writeFileSync(path.join(out,'extracted.pdf'),new Uint8Array(await extracted.blob.arrayBuffer()));

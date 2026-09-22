@@ -423,6 +423,6 @@ export async function convertPdfToWord(
         // Best-effort cleanup; the worker is local to this conversion.
       }
     }
-    await document.destroy();
+    await document.loadingTask.destroy();
   }
 }

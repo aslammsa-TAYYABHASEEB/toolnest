@@ -229,6 +229,6 @@ export async function extractPdfTables(
     throw new PdfProcessingError("word-conversion-failed", caught instanceof Error ? caught.message : "The PDF tables could not be extracted.");
   } finally {
     if (worker) await worker.terminate();
-    await document.destroy();
+    await document.loadingTask.destroy();
   }
 }

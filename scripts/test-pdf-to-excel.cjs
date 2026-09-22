@@ -122,7 +122,7 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
     const document = await pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useWorkerFetch:false}).promise, pages=[];
     try {
       for(let number=1;number<=document.numPages;number++){const page=await document.getPage(number);try{pages.push(await extractWordPage(page));}finally{page.cleanup();}}
-    } finally { await document.destroy(); }
+    } finally { await document.loadingTask.destroy(); }
     markTableContinuations(pages); const tables=[];
     pages.forEach((page,pageIndex)=>page.blocks.forEach(block=>{if(block.kind!=='table')return;const rows=block.rows.map(row=>row.map(cell=>excel.inferExcelCellValue(cell.map(lineText).filter(Boolean).join('\n'))));const previous=tables.at(-1);if(block.continuation&&previous){previous.rows.push(...rows);previous.pageEnd=pageIndex+1;}else tables.push({id:`table-${tables.length+1}`,name:`Table ${tables.length+1}`,pageStart:pageIndex+1,pageEnd:pageIndex+1,source:'native',rows});}));
     return {tables,pageCount:pages.length,scannedPageCount:0};
@@ -138,7 +138,7 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   async function vectorPages(bytes) {
     const document = await pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useWorkerFetch:false}).promise, result=[];
     try { for(let number=1;number<=document.numPages;number++){const page=await document.getPage(number);try{result.push(await extractVectorGridTables(page,await page.getTextContent()));}finally{page.cleanup();}} }
-    finally { await document.destroy(); }
+    finally { await document.loadingTask.destroy(); }
     return result;
   }
   const vectorNative=await vectorPages(fixtures.native);
