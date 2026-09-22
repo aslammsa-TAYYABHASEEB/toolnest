@@ -1,4 +1,4 @@
-import { PDFName } from "pdf-lib";
+import { PDFDict, PDFName, PDFRef, PDFStream, type PDFDocument } from "pdf-lib";
 import { inspectPdfPrivacy, type PrivacyRendererOpener } from "./privacy-inspect";
 import { loadPdfDocument } from "./loading";
 import { activeActionStructureSummary, annotationStructureSummary, attachmentStructureSummary,
@@ -38,17 +38,17 @@ function latin1Text(bytes: Uint8Array) {
 }
 
 /** Restricts residual checks to serialized PDF object dictionaries, never page/content stream payloads. */
-export function serializedPdfMetadataResiduals(bytes: Uint8Array, values: MetadataValue[]) {
+export function serializedPdfMetadataResiduals(bytes: Uint8Array, values: MetadataValue[], preservedImageXmpRefs = new Set<string>()) {
   const text = latin1Text(bytes);
-  const blocks: Array<{ start: number; dictionaryEnd: number; dictionary: string }> = [];
-  const objectStart = /\b\d+\s+\d+\s+obj\b/g;
+  const blocks: Array<{ ref: string; start: number; dictionaryEnd: number; dictionary: string }> = [];
+  const objectStart = /\b(\d+)\s+(\d+)\s+obj\b/g;
   for (let match = objectStart.exec(text); match; match = objectStart.exec(text)) {
     const end = text.indexOf("endobj", objectStart.lastIndex);
     if (end < 0) break;
     const objectText = text.slice(match.index, end);
     const stream = objectText.search(/\bstream(?:\r\n|\r|\n)/);
     const dictionaryEnd = match.index + (stream < 0 ? objectText.length : stream);
-    blocks.push({ start: match.index, dictionaryEnd, dictionary: text.slice(match.index, dictionaryEnd) });
+    blocks.push({ ref: `${match[1]} ${match[2]} R`, start: match.index, dictionaryEnd, dictionary: text.slice(match.index, dictionaryEnd) });
     objectStart.lastIndex = end + 6;
   }
   let infoValues = 0;
@@ -57,9 +57,24 @@ export function serializedPdfMetadataResiduals(bytes: Uint8Array, values: Metada
     if (blocks.some(block => block.dictionary.includes(keyToken) &&
       serializedPdfContainsSecret(bytes.subarray(block.start, block.dictionaryEnd), value))) infoValues++;
   }
-  const xmpContainers = blocks.filter(block => /\/Type\s*\/Metadata\b/.test(block.dictionary) ||
-    (/\/Subtype\s*\/XML\b/.test(block.dictionary) && /\/Metadata\b/.test(block.dictionary))).length;
+  const latestOffsets = new Map<string, number>();
+  for (const block of blocks) latestOffsets.set(block.ref, block.start);
+  const xmpContainers = blocks.filter(block => (/\/Type\s*\/Metadata\b/.test(block.dictionary) ||
+    (/\/Subtype\s*\/XML\b/.test(block.dictionary) && /\/Metadata\b/.test(block.dictionary))) &&
+    !(preservedImageXmpRefs.has(block.ref) && latestOffsets.get(block.ref) === block.start)).length;
   return { infoValues, xmpContainers };
+}
+
+function reachableImageXmpReferences(document: PDFDocument, unreachable: string[]) {
+  const references = new Set<string>(), unreachableSet = new Set(unreachable);
+  for (const [ref, object] of document.context.enumerateIndirectObjects()) {
+    if (unreachableSet.has(ref.toString())) continue;
+    const dict = object instanceof PDFStream ? object.dict : object instanceof PDFDict ? object : undefined;
+    if (dict?.lookupMaybe(PDFName.of("Subtype"), PDFName)?.asString() !== "/Image") continue;
+    const metadata = dict.get(PDFName.of("Metadata"));
+    if (metadata instanceof PDFRef) references.add(metadata.toString());
+  }
+  return references;
 }
 
 export async function verifyMetadataSanitization(
@@ -81,10 +96,11 @@ export async function verifyMetadataSanitization(
     const values = before.findings.filter(finding => finding.category === "metadata")
       .map(finding => ({ key: finding.evidence?.key, value: finding.evidence?.value }))
       .filter((entry): entry is MetadataValue => typeof entry.key === "string" && typeof entry.value === "string" && entry.value.length >= 4);
-    const residuals = serializedPdfMetadataResiduals(outputBytes, values);
+    const residuals = serializedPdfMetadataResiduals(outputBytes, values,
+      reachableImageXmpReferences(parsed, reachability.unreachable));
     if (reachability.unreachable.length) warnings.push(`${reachability.unreachable.length} unreachable output object(s) remain.`);
     if (residuals.infoValues) warnings.push(`${residuals.infoValues} prior metadata value(s) remain in serialized Info context.`);
-    if (residuals.xmpContainers) warnings.push(`${residuals.xmpContainers} serialized XMP metadata container(s) remain.`);
+    if (residuals.xmpContainers) warnings.push(`${residuals.xmpContainers} serialized document-XMP metadata container(s) remain.`);
     const pageCountPreserved = parsed.getPageCount() === before.pageCount;
     if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
     return { inspection, verification: {

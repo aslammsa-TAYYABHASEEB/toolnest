@@ -43,23 +43,61 @@ export async function sanitizePdfMetadata(file: File, openRenderer?: PrivacyRend
 function removeAttachmentReferences(document: Awaited<ReturnType<typeof loadPdfDocument>>) {
   const names = document.catalog.lookupMaybe(PDFName.of("Names"), PDFDict);
   const removedNameTree = Boolean(names?.delete(PDFName.of("EmbeddedFiles")));
-  let removedAssociatedEntries = 0, removedAnnotations = 0;
+  const removedEmptyNames = Boolean(names && !names.keys().length && document.catalog.delete(PDFName.of("Names")));
+  const resetPageMode = document.catalog.lookupMaybe(PDFName.of("PageMode"), PDFName)?.asString() === "/UseAttachments";
+  if (resetPageMode) document.catalog.delete(PDFName.of("PageMode"));
+  let removedAssociatedEntries = 0, removedAnnotations = 0, removedDependentPopups = 0, removedStaleAnnotationLinks = 0;
   inspectPdfObjects(document, ({ object }) => {
     const dict = object instanceof PDFDict ? object : object.dict;
     if (dict.delete(PDFName.of("AF"))) removedAssociatedEntries++;
   });
+  const resolve = (value: unknown) => value instanceof PDFRef ? document.context.lookup(value) : value;
+  const entries: Array<{ array: PDFArray; dict: PDFDict }> = [];
+  for (const page of document.getPages()) {
+    const annots = page.node.Annots();
+    if (!annots) continue;
+    for (let index = 0; index < annots.size(); index++) {
+      const resolved = resolve(annots.get(index));
+      if (resolved instanceof PDFDict) entries.push({ array: annots, dict: resolved });
+    }
+  }
+  const remove = new Set<PDFDict>();
+  for (const { dict } of entries)
+    if (dict.lookupMaybe(PDFName.of("Subtype"), PDFName)?.asString() === "/FileAttachment") remove.add(dict);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const { dict } of entries) {
+      if (remove.has(dict) || dict.lookupMaybe(PDFName.of("Subtype"), PDFName)?.asString() !== "/Popup") continue;
+      const parent = resolve(dict.get(PDFName.of("Parent")));
+      const ownedByRemoved = parent instanceof PDFDict && remove.has(parent);
+      const linkedFromRemoved = [...remove].some(owner => resolve(owner.get(PDFName.of("Popup"))) === dict);
+      const sharedBySurvivor = entries.some(entry => entry.dict !== dict && !remove.has(entry.dict) &&
+        entry.dict.lookupMaybe(PDFName.of("Subtype"), PDFName)?.asString() !== "/Popup" &&
+        resolve(entry.dict.get(PDFName.of("Popup"))) === dict);
+      if ((ownedByRemoved || linkedFromRemoved) && !sharedBySurvivor) {
+        remove.add(dict); removedDependentPopups++; changed = true;
+      }
+    }
+  }
   for (const page of document.getPages()) {
     const annots = page.node.Annots();
     if (!annots) continue;
     for (let index = annots.size() - 1; index >= 0; index--) {
-      const value = annots.get(index);
-      const resolved = value instanceof PDFRef ? document.context.lookup(value) : value;
-      if (resolved instanceof PDFDict && resolved.lookupMaybe(PDFName.of("Subtype"), PDFName)?.asString() === "/FileAttachment") {
-        annots.remove(index); removedAnnotations++;
-      }
+      const resolved = resolve(annots.get(index));
+      if (resolved instanceof PDFDict && remove.has(resolved)) { annots.remove(index); removedAnnotations++; }
+    }
+    if (!annots.size()) page.node.delete(PDFName.of("Annots"));
+  }
+  for (const { dict } of entries) {
+    if (remove.has(dict)) continue;
+    for (const key of [PDFName.of("Parent"), PDFName.of("Popup"), PDFName.of("IRT")]) {
+      const linked = resolve(dict.get(key));
+      if (linked instanceof PDFDict && remove.has(linked) && dict.delete(key)) removedStaleAnnotationLinks++;
     }
   }
-  return { removedNameTree, removedAssociatedEntries, removedAnnotations };
+  return { removedNameTree, removedEmptyNames, resetPageMode, removedAssociatedEntries, removedAnnotations,
+    removedDependentPopups, removedStaleAnnotationLinks };
 }
 
 export async function sanitizePdfAttachments(file: File, openRenderer?: PrivacyRendererOpener) {
