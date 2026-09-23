@@ -1,8 +1,15 @@
 import type { OcrLayoutLine } from "./ocr-word-layout";
 import type { GridMerge } from "./vector-table";
 
+export type ScannedGridCellEvidence = {
+  sourceText: string;
+  bbox: { left: number; top: number; width: number; height: number };
+  /** Character-weighted mean of the actual contributing Tesseract words. */
+  ocrConfidence: number;
+};
 export type ScannedGridTable = {
   rows: string[][];
+  evidence: Array<Array<ScannedGridCellEvidence | null>>;
   merges: GridMerge[];
   headerRows: number;
   diagnostics: { horizontalLines: number; verticalLines: number; words: number; assignedWords: number };
@@ -171,11 +178,23 @@ export function extractScannedGridTables(
       }
       return lines.map(line => line.sort((a, b) => a.x0 - b.x0).map(word => word.text).join(" ")).join("\n");
     }));
+    const evidence = cells.map((row, rowIndex) => row.map((wordsInCell, columnIndex) => {
+      const sourceText = rows[rowIndex][columnIndex];
+      if (!sourceText || !wordsInCell.length) return null;
+      const left = Math.min(...wordsInCell.map(word => word.x0)) / width;
+      const top = Math.min(...wordsInCell.map(word => word.y0)) / height;
+      const right = Math.max(...wordsInCell.map(word => word.x1)) / width;
+      const bottom = Math.max(...wordsInCell.map(word => word.y1)) / height;
+      const weight = wordsInCell.reduce((sum, word) => sum + Math.max(1, word.text.length), 0);
+      return { sourceText, bbox: { left, top, width: right - left, height: bottom - top },
+        ocrConfidence: wordsInCell.reduce((sum, word) =>
+          sum + word.confidence * Math.max(1, word.text.length), 0) / weight };
+    }));
     if (assignedWords < 8 || rows.filter(row => row.filter(Boolean).length >= 2).length < 2) continue;
     const firstRow = rows[0] ?? [];
     const headerRows = firstRow.filter(cell => /\d/.test(cell)).length <= 1 &&
       firstRow.filter(cell => /[A-Za-z]{2,}/.test(cell)).length >= 2 ? 1 : 0;
-    results.push({ rows, merges: [], headerRows,
+    results.push({ rows, evidence, merges: [], headerRows,
       diagnostics: { horizontalLines: y.length, verticalLines: x.length, words, assignedWords } });
   }
   return results;

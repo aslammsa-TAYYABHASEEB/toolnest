@@ -13,10 +13,18 @@ export interface WordParagraph {
   alignment: "left" | "center" | "right"; firstIndent: number; pitch: number;
   ocrConfidence?:number;
 }
+export interface WordTableSourceCell {
+  sourceText: string;
+  x: number; y: number; right: number; bottom: number;
+  /** Character-weighted mean of contributing Tesseract word confidences. */
+  ocrConfidence?: number;
+}
 export interface WordTable {
   kind: "table"; x: number; right: number; y: number; bottom: number;
   edges: number[]; rows: WordLine[][][]; rowHeights: number[];
   ruled: boolean; continuation?: boolean;
+  /** Optional original OCR geometry; native tables retain geometry in spans. */
+  sourceCells?: Array<Array<WordTableSourceCell | null>>;
 }
 export interface WordImage {kind:"image";x:number;right:number;y:number;bottom:number;data:Uint8Array}
 export type WordBlock = WordParagraph | WordTable | WordImage;

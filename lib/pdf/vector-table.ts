@@ -4,7 +4,16 @@ import type { WordRule } from "./word-layout";
 
 type TextContent = Awaited<ReturnType<PDFPageProxy["getTextContent"]>>;
 export type GridMerge = { startRow: number; endRow: number; startColumn: number; endColumn: number };
-export type VectorGridTable = { rows: string[][]; merges: GridMerge[]; headerRows: number };
+export type VectorGridCellEvidence = {
+  sourceText: string;
+  bbox: { left: number; top: number; width: number; height: number };
+};
+export type VectorGridTable = {
+  rows: string[][];
+  evidence: Array<Array<VectorGridCellEvidence | null>>;
+  merges: GridMerge[];
+  headerRows: number;
+};
 type Segment = { start: number; end: number };
 type Band = { coordinate: number; segments: Segment[] };
 
@@ -183,6 +192,20 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
     }
     return result;
   }));
+  const evidence: Array<Array<VectorGridCellEvidence | null>> = output.map((row, r) =>
+    row.map((sourceText, col) => {
+      if (!sourceText) return null;
+      const key = root(r * columns + col);
+      const anchor = anchors.get(key) ?? { row: r, column: col };
+      if (anchor.row !== r || anchor.column !== col) return null;
+      const cells = components.get(key) ?? [r * columns + col];
+      const r0 = Math.min(...cells.map(index => Math.floor(index / columns)));
+      const r1 = Math.max(...cells.map(index => Math.floor(index / columns)));
+      const c0 = Math.min(...cells.map(index => index % columns));
+      const c1 = Math.max(...cells.map(index => index % columns));
+      return { sourceText, bbox: { left: x[c0] / viewport.width, top: y[r0] / viewport.height,
+        width: (x[c1 + 1] - x[c0]) / viewport.width, height: (y[r1 + 1] - y[r0]) / viewport.height } };
+    }));
   const firstData = output.findIndex((row, index) => index > 0 &&
     row.filter(cell => /^-?\d[\d,.]*$/.test(cell.trim())).length >= 2);
   let headerRows = firstData > 0 ? Math.min(firstData, 4) : 1;
@@ -195,6 +218,7 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
     const labels = nativeItems.filter(item => item.y > preHeader.coordinate && item.y < top && item.x >= left && item.x <= right);
     if (labels.length) {
       const row = Array.from({ length: columns }, () => "");
+      const rowEvidence: Array<VectorGridCellEvidence | null> = Array.from({ length: columns }, () => null);
       const preMerges: GridMerge[] = [];
       for (const item of labels) {
         const segment = preHeader.segments.find(part => item.x >= part.start && item.x <= part.end);
@@ -202,11 +226,15 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
         const start = locate(x, segment.start + 1), end = locate(x, segment.end - 1);
         if (start < 0 || end < start) continue;
         row[start] += `${row[start] ? " " : ""}${item.text}`;
+        rowEvidence[start] = { sourceText: row[start], bbox: { left: x[start] / viewport.width,
+          top: preHeader.coordinate / viewport.height, width: (x[end + 1] - x[start]) / viewport.width,
+          height: (top - preHeader.coordinate) / viewport.height } };
         if (end > start && !preMerges.some(merge => merge.startColumn === start && merge.endColumn === end))
           preMerges.push({ startRow: 0, endRow: 0, startColumn: start, endColumn: end });
       }
       if (row.some(Boolean)) {
         output.unshift(row);
+        evidence.unshift(rowEvidence);
         merges.forEach(merge => { merge.startRow += 1; merge.endRow += 1; });
         merges.push(...preMerges);
         headerRows += 1;
@@ -224,13 +252,20 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
       const col = locate(x, item.x);
       if (col >= 0) footer[col] += `${footer[col] ? " " : ""}${item.text}`;
     }
-    if (footer.filter(Boolean).length >= 2 && footer.some(cell => /\d/.test(cell))) output.push(footer);
+    if (footer.filter(Boolean).length >= 2 && footer.some(cell => /\d/.test(cell))) {
+      output.push(footer);
+      evidence.push(footer.map((sourceText, col) => sourceText ? { sourceText,
+        bbox: { left: x[col] / viewport.width, top: footerTop / viewport.height,
+          width: (x[col + 1] - x[col]) / viewport.width,
+          height: (footerBottom - footerTop) / viewport.height } } : null));
+    }
   }
   // Remove only wholly empty, unmerged grid rows. A blank label cell is not
   // evidence that a numeric summary row is empty.
   for (let row = output.length - 1; row >= 0; row--) {
     if (output[row].some(cell => cell.trim()) || merges.some(merge => merge.startRow <= row && merge.endRow >= row)) continue;
     output.splice(row, 1);
+    evidence.splice(row, 1);
     for (const merge of merges) {
       if (merge.startRow > row) merge.startRow -= 1;
       if (merge.endRow > row) merge.endRow -= 1;
@@ -238,5 +273,5 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
     if (row < headerRows) headerRows -= 1;
   }
   if (output.filter(row => row.filter(Boolean).length >= 2).length < 2) return [];
-  return [{ rows: output, merges, headerRows }];
+  return [{ rows: output, evidence, merges, headerRows }];
 }

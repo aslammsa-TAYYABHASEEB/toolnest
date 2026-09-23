@@ -18,6 +18,28 @@ export const MAX_PDF_TO_EXCEL_SOURCE_PAGES = 300;
 export const MAX_PDF_TO_EXCEL_OUTPUT_SIZE = 50 * 1024 * 1024;
 
 export type ExcelCellValue = string | number;
+
+/**
+ * Normalized source-page coordinates: top-left origin, values in 0..1,
+ * relative to the displayed orientation used by Source Review.
+ */
+export type PdfSourceBox = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+export type PdfCellEvidence = {
+  page: number;
+  bbox: PdfSourceBox;
+  sourceText: string;
+  source: "pdf-text" | "ocr";
+  /** Actual Tesseract confidence when contributing OCR words are available. */
+  ocrConfidence?: number;
+  /** Additional clockwise correction used when interpreting this bbox. */
+  rotation?: 0 | 90 | 180 | 270;
+};
+export type PdfTableExtractionMethod = "vector-grid" | "layout-table" | "scanned-grid" | "ocr-layout";
 export type ExtractedPdfTable = {
   id: string;
   name: string;
@@ -25,6 +47,9 @@ export type ExtractedPdfTable = {
   pageEnd: number;
   source: "native" | "ocr";
   rows: ExcelCellValue[][];
+  /** Parallel to rows; null marks empty or subordinate merged cells. */
+  evidence?: Array<Array<PdfCellEvidence | null>>;
+  method?: PdfTableExtractionMethod;
   merges?: GridMerge[];
   headerRows?: number;
 };
@@ -51,9 +76,47 @@ export function inferExcelCellValue(text: string, columnHeading = ""): ExcelCell
   return Number.isFinite(numeric) ? numeric : value;
 }
 
-function tableRows(table: WordTable): ExcelCellValue[][] {
-  const rows = table.rows.map(row => row.map(cell => cell.map(lineText).filter(Boolean).join("\n")));
-  return rows.map(row => row.map((cell, column) => inferExcelCellValue(cell, rows[0]?.[column] ?? "")));
+function normalizedBox(left: number, top: number, right: number, bottom: number, page: WordPage): PdfSourceBox {
+  const tolerance = 1e-6;
+  const clampTolerance = (value: number) => value < 0 && value >= -tolerance ? 0 :
+    value > 1 && value <= 1 + tolerance ? 1 : value;
+  const normalizedLeft = clampTolerance(left / page.width);
+  const normalizedTop = clampTolerance(top / page.height);
+  const normalizedRight = clampTolerance(right / page.width);
+  const normalizedBottom = clampTolerance(bottom / page.height);
+  return { left: normalizedLeft, top: normalizedTop,
+    width: normalizedRight - normalizedLeft, height: normalizedBottom - normalizedTop };
+}
+
+export function wordTableRowsWithEvidence(
+  table: WordTable,
+  page: WordPage,
+  pageNumber: number,
+  source: "native" | "ocr",
+  rotation: 0 | 90 | 180 | 270,
+): { rows: ExcelCellValue[][]; evidence: Array<Array<PdfCellEvidence | null>> } {
+  const sourceRows = table.rows.map(row => row.map(cell => cell.map(lineText).filter(Boolean).join("\n")));
+  const evidence = table.rows.map((row, rowIndex) => row.map((cell, columnIndex) => {
+    const sourceText = sourceRows[rowIndex][columnIndex];
+    if (!sourceText) return null;
+    const retained = table.sourceCells?.[rowIndex]?.[columnIndex];
+    if (retained) return { page: pageNumber,
+      bbox: normalizedBox(retained.x, retained.y, retained.right, retained.bottom, page),
+      sourceText: retained.sourceText, source: "ocr" as const,
+      ocrConfidence: retained.ocrConfidence, rotation };
+    const spans = cell.flatMap(line => line.spans);
+    if (!spans.length) return null;
+    return { page: pageNumber,
+      bbox: normalizedBox(Math.min(...spans.map(span => span.x)),
+        Math.min(...spans.map(span => span.y - span.size)),
+        Math.max(...spans.map(span => span.x + span.width)),
+        Math.max(...spans.map(span => span.y + span.size * .2)), page),
+      sourceText, source: source === "ocr" ? "ocr" as const : "pdf-text" as const,
+      rotation };
+  }));
+  const rows = sourceRows.map(row => row.map((cell, column) =>
+    inferExcelCellValue(cell, sourceRows[0]?.[column] ?? "")));
+  return { rows, evidence };
 }
 
 export function scannedTableRows(grid: ScannedGridTable): ExcelCellValue[][] {
@@ -67,6 +130,20 @@ export function scannedTableRows(grid: ScannedGridTable): ExcelCellValue[][] {
   }
   return grid.rows.map(row => row.map((cell, column) =>
     /\bdate\b/i.test(headings[column]) ? cell.trim() : inferExcelCellValue(cell, headings[column])));
+}
+
+export function vectorTableEvidence(vector: VectorGridTable, pageNumber: number): Array<Array<PdfCellEvidence | null>> {
+  return vector.evidence.map(row => row.map(cell => cell ? { ...cell,
+    page: pageNumber, source: "pdf-text" as const, rotation: 0 as const } : null));
+}
+
+export function scannedTableEvidence(
+  grid: ScannedGridTable,
+  pageNumber: number,
+  rotation: 0 | 90 | 180 | 270,
+): Array<Array<PdfCellEvidence | null>> {
+  return grid.evidence.map(row => row.map(cell => cell ? { ...cell,
+    page: pageNumber, source: "ocr" as const, rotation } : null));
 }
 
 function safeSheetName(name: string, used: Set<string>) {
@@ -149,6 +226,7 @@ export async function extractPdfTables(
   const pages: WordPage[] = [];
   const vectorPages = new Map<number, VectorGridTable[]>();
   const scannedGridPages = new Map<number, ScannedGridTable[]>();
+  const ocrRotations = new Map<number, 0 | 90 | 180 | 270>();
   const sources: Array<"native" | "ocr"> = [];
   try {
     if (!document.numPages || document.numPages > MAX_PDF_TO_EXCEL_SOURCE_PAGES) {
@@ -180,6 +258,7 @@ export async function extractPdfTables(
           (current, total, phase, progress) =>
             onProgress?.(current, total, phase === "ocr-download" ? "ocr-download" : "ocr", progress),
           undefined, true);
+        ocrRotations.set(pageNumber, recognized.rotation);
         const baseGridCanvas = await renderPageToCanvasForOcr(page, 1.5);
         let gridCanvas: HTMLCanvasElement = baseGridCanvas;
         try {
@@ -200,27 +279,46 @@ export async function extractPdfTables(
     pages.forEach((page, pageIndex) => {
       const vectorTables = vectorPages.get(pageIndex + 1);
       if (vectorTables) {
-        for (const vector of vectorTables) tables.push({ id: `table-${tables.length + 1}`, name: `Table ${tables.length + 1}`, pageStart: pageIndex + 1, pageEnd: pageIndex + 1, source: "native", rows: vector.rows.map(row => row.map((cell, column) => inferExcelCellValue(cell, vector.rows.slice(0, vector.headerRows).map(header => header[column]).join(" ")))), merges: vector.merges, headerRows: vector.headerRows });
+        for (const vector of vectorTables) tables.push({
+          id: "table-" + (tables.length + 1), name: "Table " + (tables.length + 1),
+          pageStart: pageIndex + 1, pageEnd: pageIndex + 1, source: "native", method: "vector-grid",
+          rows: vector.rows.map(row => row.map((cell, column) => inferExcelCellValue(cell,
+            vector.rows.slice(0, vector.headerRows).map(header => header[column]).join(" ")))),
+          evidence: vectorTableEvidence(vector, pageIndex + 1),
+          merges: vector.merges, headerRows: vector.headerRows,
+        });
         return;
       }
       const scannedGrids = scannedGridPages.get(pageIndex + 1);
       if (scannedGrids) {
-        for (const grid of scannedGrids) tables.push({ id: `table-${tables.length + 1}`,
-          name: `Table ${tables.length + 1}`, pageStart: pageIndex + 1, pageEnd: pageIndex + 1,
-          source: "ocr", rows: scannedTableRows(grid),
-          merges: grid.merges, headerRows: grid.headerRows });
+        for (const grid of scannedGrids) tables.push({
+          id: "table-" + (tables.length + 1), name: "Table " + (tables.length + 1),
+          pageStart: pageIndex + 1, pageEnd: pageIndex + 1,
+          source: "ocr", method: "scanned-grid", rows: scannedTableRows(grid),
+          evidence: scannedTableEvidence(grid, pageIndex + 1,
+            ocrRotations.get(pageIndex + 1) ?? 0),
+          merges: grid.merges, headerRows: grid.headerRows,
+        });
         return;
       }
       page.blocks.forEach((block) => {
         if (block.kind !== "table") return;
-        const rows = tableRows(block);
+        const source = sources[pageIndex];
+        const extracted = wordTableRowsWithEvidence(block, page, pageIndex + 1, source,
+          source === "ocr" ? ocrRotations.get(pageIndex + 1) ?? 0 : 0);
         const previous = tables[tables.length - 1];
-        if (block.continuation && previous && previous.rows[0]?.length === rows[0]?.length) {
-          previous.rows.push(...rows);
+        if (block.continuation && previous && previous.rows[0]?.length === extracted.rows[0]?.length) {
+          previous.rows.push(...extracted.rows);
+          previous.evidence?.push(...extracted.evidence);
           previous.pageEnd = pageIndex + 1;
           return;
         }
-        tables.push({ id: `table-${tables.length + 1}`, name: `Table ${tables.length + 1}`, pageStart: pageIndex + 1, pageEnd: pageIndex + 1, source: sources[pageIndex], rows });
+        tables.push({
+          id: "table-" + (tables.length + 1), name: "Table " + (tables.length + 1),
+          pageStart: pageIndex + 1, pageEnd: pageIndex + 1, source,
+          method: source === "ocr" ? "ocr-layout" : "layout-table",
+          rows: extracted.rows, evidence: extracted.evidence,
+        });
       });
     });
     return { tables, pageCount: document.numPages, scannedPageCount };

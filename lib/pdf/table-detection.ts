@@ -356,6 +356,9 @@ export interface OcrWordBox {
   text: string;
   x0: number;
   x1: number;
+  /** Present for Tesseract words; optional for conservative synthetic inputs. */
+  y0?: number;
+  y1?: number;
   confidence: number;
 }
 

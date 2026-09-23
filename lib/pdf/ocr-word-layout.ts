@@ -75,13 +75,28 @@ export function buildOcrWordPage(lines:OcrLayoutLine[],pixelWidth:number,pixelHe
     if(part.kind==='prose') continue;
     const consumed=part.lines;
     if(!consumed.length) continue;
-    const source=part.table,edges=[...source.columnXs,source.tableRight].map(x=>x*sx);
+    const source=part.table,pixelEdges=[...source.columnXs,source.tableRight],edges=pixelEdges.map(x=>x*sx);
     const top=consumed[0].y0*sy,bottom=consumed[consumed.length-1].y1*sy;
     const size=median(consumed.map(l=>(l.y1-l.y0)*sy*.94),10);
     const rowHeight=(bottom-top)/source.rows.length;
     const rows=source.rows.map((cells,r)=>cells.map((text,c)=>[{x:edges[c]+2,right:edges[c+1]-2,y:top+r*rowHeight+size,size,spans:[{text,x:edges[c]+2,y:top+r*rowHeight+size,width:edges[c+1]-edges[c]-4,size,font:'Arial',bold:false,italic:false}]}]));
+    const sourceCells=source.rows.map((cells,r)=>cells.map((sourceText,c)=>{
+      if(!sourceText) return null;
+      const line=consumed[r];
+      const words=line.words.filter(word=>{
+        const center=(word.x0+word.x1)/2;
+        return center>=pixelEdges[c] && center<=pixelEdges[c+1];
+      });
+      if(!words.length) return null;
+      const weight=words.reduce((sum,word)=>sum+Math.max(1,word.text.trim().length),0);
+      return {sourceText,x:Math.min(...words.map(word=>word.x0))*sx,
+        y:Math.min(...words.map(word=>word.y0??line.y0))*sy,
+        right:Math.max(...words.map(word=>word.x1))*sx,
+        bottom:Math.max(...words.map(word=>word.y1??line.y1))*sy,
+        ocrConfidence:words.reduce((sum,word)=>sum+word.confidence*Math.max(1,word.text.trim().length),0)/weight};
+    }));
     page.blocks=page.blocks.filter(b=>b.y<top-.01 || b.y>bottom);
-    page.blocks.push({kind:'table',x:edges[0],right:edges[edges.length-1],y:top,bottom,edges,rows,rowHeights:rows.map(()=>rowHeight),ruled:true});
+    page.blocks.push({kind:'table',x:edges[0],right:edges[edges.length-1],y:top,bottom,edges,rows,rowHeights:rows.map(()=>rowHeight),ruled:true,sourceCells});
   }
   page.blocks.sort((a,b)=>a.y-b.y);
   return page;

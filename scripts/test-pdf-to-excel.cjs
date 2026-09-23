@@ -26,6 +26,33 @@ const { rotateCanvas } = require('../lib/pdf/ocr-render.ts');
 const output = path.resolve('work/pdf-excel-qa');
 fs.mkdirSync(output, { recursive:true });
 
+function assertEvidenceInvariant(result) {
+  for (const table of result.tables) {
+    assert.ok(table.evidence, table.name + " must retain source evidence");
+    assert.equal(table.evidence.length, table.rows.length, table.name + " evidence row count");
+    table.rows.forEach((row, rowIndex) => {
+      assert.equal(table.evidence[rowIndex].length, row.length, table.name + " evidence columns");
+      row.forEach((value, columnIndex) => {
+        const evidence = table.evidence[rowIndex][columnIndex];
+        if (String(value) !== "") assert.ok(evidence, table.name + " missing evidence at " + rowIndex + "," + columnIndex);
+        if (!evidence) return;
+        assert.ok(evidence.page >= 1 && evidence.page <= result.pageCount);
+        assert.equal(typeof evidence.sourceText, "string");
+        const values = [evidence.bbox.left, evidence.bbox.top, evidence.bbox.width, evidence.bbox.height];
+        assert.ok(values.every(Number.isFinite), "bbox values must be finite");
+        assert.ok(evidence.bbox.left >= 0 && evidence.bbox.top >= 0);
+        assert.ok(evidence.bbox.width > 0 && evidence.bbox.height > 0);
+        assert.ok(evidence.bbox.left + evidence.bbox.width <= 1 + 1e-6);
+        assert.ok(evidence.bbox.top + evidence.bbox.height <= 1 + 1e-6);
+        if (evidence.ocrConfidence !== undefined) {
+          assert.ok(Number.isFinite(evidence.ocrConfidence));
+          assert.ok(evidence.ocrConfidence >= 0 && evidence.ocrConfidence <= 100);
+        }
+      });
+    });
+  }
+}
+
 function drawGrid(page, font, rows, { x=40, y=520, widths=[70,220,100], rowHeight=42 }={}) {
   const total = widths.reduce((sum, width) => sum + width, 0);
   const xs = [x]; widths.forEach(width => xs.push(xs.at(-1) + width));
@@ -84,6 +111,11 @@ async function stackedCellFixture() {
   page.drawText('8',{x:edge+7,y:top-36,size:11,font});
   return pdf.save();
 }
+async function numericEvidenceFixture() {
+  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica),page=pdf.addPage([470,650]);
+  drawGrid(page,font,[['Label','Account','Amount'],['Current','A1','22,960'],['Previous','A2','1,234.50']],{x:40,y:550,widths:[100,100,120],rowHeight:42});
+  return pdf.save();
+}
 async function scannedFixture() {
   const image=canvas.createCanvas(1400,1000), context=image.getContext('2d');
   context.fillStyle='#fff';context.fillRect(0,0,image.width,image.height);context.font='52px Arial';context.fillStyle='#111';
@@ -124,16 +156,30 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
       for(let number=1;number<=document.numPages;number++){const page=await document.getPage(number);try{pages.push(await extractWordPage(page));}finally{page.cleanup();}}
     } finally { await document.loadingTask.destroy(); }
     markTableContinuations(pages); const tables=[];
-    pages.forEach((page,pageIndex)=>page.blocks.forEach(block=>{if(block.kind!=='table')return;const rows=block.rows.map(row=>row.map(cell=>excel.inferExcelCellValue(cell.map(lineText).filter(Boolean).join('\n'))));const previous=tables.at(-1);if(block.continuation&&previous){previous.rows.push(...rows);previous.pageEnd=pageIndex+1;}else tables.push({id:`table-${tables.length+1}`,name:`Table ${tables.length+1}`,pageStart:pageIndex+1,pageEnd:pageIndex+1,source:'native',rows});}));
+    pages.forEach((page,pageIndex)=>page.blocks.forEach(block=>{
+      if(block.kind!=='table')return;
+      const extracted=excel.wordTableRowsWithEvidence(block,page,pageIndex+1,'native',0);
+      const previous=tables.at(-1);
+      if(block.continuation&&previous){
+        previous.rows.push(...extracted.rows);previous.evidence.push(...extracted.evidence);previous.pageEnd=pageIndex+1;
+      } else tables.push({id:'table-'+(tables.length+1),name:'Table '+(tables.length+1),pageStart:pageIndex+1,pageEnd:pageIndex+1,source:'native',method:'layout-table',rows:extracted.rows,evidence:extracted.evidence});
+    }));
     return {tables,pageCount:pages.length,scannedPageCount:0};
   }
-  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture() };
+  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture(), numeric:await numericEvidenceFixture() };
   for(const [name,bytes] of Object.entries(fixtures)) fs.writeFileSync(path.join(output,`${name}.pdf`),bytes);
   const native=await extractNative(fixtures.native);
   assert.equal(native.tables.length,1); assert.equal(native.tables[0].rows.length,4); assert.equal(native.tables[0].rows[0].length,3);
   assert.equal(native.tables[0].rows[2][1],''); assert.equal(native.tables[0].rows[1][2],25.5); assert.equal(native.tables[0].rows[1][0],1001);
+  assertEvidenceInvariant(native);
+  assert.equal(native.tables[0].evidence[1][1].sourceText,'Paper');
+  const nativePaper=native.tables[0].evidence[1][1].bbox;
+  assert.ok(nativePaper.left <= 117/470 && nativePaper.left + nativePaper.width >= 145/470);
   const multi=await extractNative(fixtures.multi);
   assert.equal(multi.tables.length,1); assert.equal(multi.tables[0].pageStart,1); assert.equal(multi.tables[0].pageEnd,2); assert.equal(multi.tables[0].rows.length,6);
+  assertEvidenceInvariant(multi);
+  assert.deepEqual(multi.tables[0].evidence.slice(0,3).flat().filter(Boolean).map(cell=>cell.page).filter((page,index,array)=>array.indexOf(page)===index),[1]);
+  assert.deepEqual(multi.tables[0].evidence.slice(3).flat().filter(Boolean).map(cell=>cell.page).filter((page,index,array)=>array.indexOf(page)===index),[2]);
   const none=await extractNative(fixtures.none); assert.equal(none.tables.length,0);
   async function vectorPages(bytes) {
     const document = await pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useWorkerFetch:false}).promise, result=[];
@@ -144,6 +190,26 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   const vectorNative=await vectorPages(fixtures.native);
   assert.equal(vectorNative[0].length,1); assert.equal(vectorNative[0][0].rows.length,4); assert.equal(vectorNative[0][0].rows[0].length,3);
   assert.equal(vectorNative[0][0].rows[2][1],'');
+  const vectorNativeEvidence=excel.vectorTableEvidence(vectorNative[0][0],1);
+  const vectorNativeTable={id:'vector-native',name:'Vector native',pageStart:1,pageEnd:1,source:'native',method:'vector-grid',
+    rows:vectorNative[0][0].rows.map(row=>row.map(excel.inferExcelCellValue)),evidence:vectorNativeEvidence};
+  assertEvidenceInvariant({tables:[vectorNativeTable],pageCount:1});
+  assert.equal(vectorNativeEvidence[0][0].sourceText,'Item');
+  assert.ok(Math.abs(vectorNativeEvidence[0][0].bbox.left-40/470)<.01);
+  assert.ok(Math.abs(vectorNativeEvidence[0][0].bbox.top-100/650)<.01);
+  assert.equal(vectorNativeEvidence[2][1],null,'Empty vector cells do not invent evidence');
+
+  const vectorNumeric=(await vectorPages(fixtures.numeric))[0][0];
+  const numericEvidence=excel.vectorTableEvidence(vectorNumeric,1);
+  const numericRows=vectorNumeric.rows.map(row=>row.map((cell,column)=>
+    excel.inferExcelCellValue(cell,vectorNumeric.rows[0][column])));
+  assert.equal(numericRows[1][2],22960);
+  assert.equal(numericEvidence[1][2].sourceText,'22,960');
+  assert.equal(numericRows[2][2],1234.5);
+  assert.equal(numericEvidence[2][2].sourceText,'1,234.50');
+  assertEvidenceInvariant({tables:[{id:'numeric',name:'Numeric',pageStart:1,pageEnd:1,source:'native',
+    method:'vector-grid',rows:numericRows,evidence:numericEvidence}],pageCount:1});
+
   const vectorNone=await vectorPages(fixtures.none); assert.equal(vectorNone[0].length,0);
   const vectorStacked=await vectorPages(fixtures.stacked), stacked=vectorStacked[0][0];
   assert.equal(stacked.rows.length,5); assert.equal(stacked.rows[2][2],'3'); assert.equal(stacked.rows[3][2],'8');
@@ -167,6 +233,10 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
     assert.equal(table.rows[3][5],''); assert.equal(table.rows[5][0],'Total');
     assert.ok(table.rows[2][1].includes('Wrapped')&&table.rows[2][1].includes('label'));
     assert.ok(table.merges.some(merge=>merge.startRow===0&&merge.startColumn===0&&merge.endColumn===5));
+    const groupEvidence=table.evidence[0][0];
+    assert.ok(groupEvidence);
+    assert.ok(Math.abs(groupEvidence.bbox.width-360/840)<.015,'Merged anchor evidence spans all six columns');
+    for(let column=1;column<=5;column++) assert.equal(table.evidence[0][column],null,'Merged subordinate evidence is null');
   }
   const wideWorkbook=excel.createExcelWorkbook(vectorWide.map((pageTables,index)=>({id:`wide-${index}`,name:`Payroll ${index+1}`,pageStart:index+1,pageEnd:index+1,source:'native',rows:pageTables[0].rows.map(row=>row.map(excel.inferExcelCellValue)),merges:pageTables[0].merges,headerRows:pageTables[0].headerRows})));
   const wideZip=unzipSync(new Uint8Array(await wideWorkbook.arrayBuffer()));
@@ -176,6 +246,7 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   const workbook=excel.createExcelWorkbook(native.tables); const xlsxBytes=new Uint8Array(await workbook.arrayBuffer()); fs.writeFileSync(path.join(output,'native-tables.xlsx'),xlsxBytes);
   const zip=unzipSync(xlsxBytes), workbookXml=strFromU8(zip['xl/workbook.xml']), sheetXml=strFromU8(zip['xl/worksheets/sheet1.xml']);
   assert.match(workbookXml,/name="Table 1"/); assert.match(sheetXml,/<v>25.5<\/v>/); assert.match(sheetXml,/Paper/); assert.match(sheetXml,/autoFilter/); assert.match(sheetXml,/state="frozen"/);
+  assert.doesNotMatch(sheetXml,/sourceText|ocrConfidence|bbox|pdf-text|ocr-layout/, 'Provenance metadata must not leak into XLSX output');
   const csvBlob=excel.createTableCsv(native.tables[0]), csvBytes=new Uint8Array(await csvBlob.arrayBuffer()), csv=await csvBlob.text(); fs.writeFileSync(path.join(output,'native-table.csv'),csvBytes);
   assert.deepEqual(Array.from(csvBytes.slice(0,3)),[0xEF,0xBB,0xBF]);
   assert.equal(csv,'Item,Description,Amount\r\n1001,Paper,25.5\r\n1002,,8\r\n1003,Folders,12\r\n');
@@ -199,24 +270,61 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   ruledContext.strokeStyle='black';ruledContext.lineWidth=2;
   for(const x of [30,120,480,850]){ruledContext.beginPath();ruledContext.moveTo(x,50);ruledContext.lineTo(x,410);ruledContext.stroke();}
   for(const y of [50,140,230,320,410]){ruledContext.beginPath();ruledContext.moveTo(30,y);ruledContext.lineTo(850,y);ruledContext.stroke();}
-  const word=(text,x,y)=>({text,x0:x,y0:y,x1:x+Math.max(20,text.length*9),y1:y+24,confidence:95});
-  const ocrWords=[word('Account',40,90),word('Date',130,90),word('Amount',490,90),
-    word('0660010002450009',40,180),word('12-05-2023',130,180),word('22,960',490,180),
-    word('0002',40,270),word('13052023',130,270),word('1,234.50',490,270),
-    word('Total',130,360),word('24,194.50',490,360)];
-  const ocrLines=ocrWords.map(w=>({text:w.text,x0:w.x0,y0:w.y0,x1:w.x1,y1:w.y1,height:24,confidence:95,words:[w]}));
+  const word=(text,x,y,confidence=95)=>({text,x0:x,y0:y,x1:x+Math.max(20,text.length*9),y1:y+24,confidence});
+  const ocrWordRows=[
+    [word('Account',40,90,80),word('ID',96,90,100),word('Date',130,90),word('Amount',490,90)],
+    [word('0660010002450009',40,180),word('12-05-2023',130,180),word('22,960',490,180)],
+    [word('0002',40,270),word('13052023',130,270),word('1,234.50',490,270)],
+    [word('Total',130,360),word('24,194.50',490,360)],
+  ];
+  const ocrLines=ocrWordRows.map(words=>({text:words.map(word=>word.text).join(' '),
+    x0:Math.min(...words.map(word=>word.x0)),y0:Math.min(...words.map(word=>word.y0)),
+    x1:Math.max(...words.map(word=>word.x1)),y1:Math.max(...words.map(word=>word.y1)),
+    height:24,confidence:words.reduce((sum,word)=>sum+word.confidence,0)/words.length,words}));
   for(const degree of [0,90,180,270]){
-    const turned=rotateCanvas(ruled,degree),upright=rotateCanvas(turned,((360-degree)%360));
+    const correction=((360-degree)%360);
+    const turned=rotateCanvas(ruled,degree),upright=rotateCanvas(turned,correction);
     const detected=extractScannedGridTables(upright,ocrLines,900,500);
-    assert.equal(detected.length,1,`Ruled scanned grid at ${degree} degrees`);
+    assert.equal(detected.length,1,'Ruled scanned grid at '+degree+' degrees');
     assert.equal(detected[0].rows.length,4);assert.equal(detected[0].rows[0].length,3);
     assert.equal(detected[0].rows[3][0],'');
     const typed=excel.scannedTableRows(detected[0]);
     assert.equal(typed[1][0],'0660010002450009');assert.equal(typed[1][2],22960);
     assert.equal(typed[2][1],'13052023');assert.equal(typed[2][2],1234.5);
     assert.equal(typed[3][0],'');assert.equal(typed[3][2],24194.5);
+    const evidence=excel.scannedTableEvidence(detected[0],1,correction);
+    const proofTable={id:'scan-'+degree,name:'Scan '+degree,pageStart:1,pageEnd:1,source:'ocr',
+      method:'scanned-grid',rows:typed,evidence};
+    assertEvidenceInvariant({tables:[proofTable],pageCount:1});
+    assert.equal(evidence[1][2].sourceText,'22,960');
+    assert.equal(evidence[2][2].sourceText,'1,234.50');
+    assert.equal(evidence[2][2].ocrConfidence,95);
+    assert.equal(evidence[0][0].ocrConfidence,(80*7+100*2)/9,
+      'OCR confidence is character-weighted across contributing words');
+    assert.equal(evidence[0][0].rotation,correction);
+    assert.equal(evidence[3][0],null);
     if(turned!==ruled){turned.width=0;turned.height=0;upright.width=0;upright.height=0;}
   }
+  const ocrLayoutWordRows=[
+    [word('Account',40,90,80),word('ID',96,90,100),word('Date',300,90),word('Amount',650,90)],
+    [word('0660010002450009',40,180),word('12-05-2023',300,180),word('22,960',650,180)],
+    [word('0002',40,270),word('13052023',300,270),word('1,234.50',650,270)],
+    [word('Total',300,360),word('24,194.50',650,360)],
+  ];
+  const ocrLayoutLines=ocrLayoutWordRows.map(words=>({text:words.map(word=>word.text).join(' '),
+    x0:Math.min(...words.map(word=>word.x0)),y0:Math.min(...words.map(word=>word.y0)),
+    x1:Math.max(...words.map(word=>word.x1)),y1:Math.max(...words.map(word=>word.y1)),
+    height:24,confidence:words.reduce((sum,word)=>sum+word.confidence,0)/words.length,words}));
+  const ocrLayoutPage=buildOcrWordPage(ocrLayoutLines,900,500,450,250);
+  const ocrLayoutTable=ocrLayoutPage.blocks.find(block=>block.kind==='table');
+  assert.ok(ocrLayoutTable,'Synthetic OCR layout table should be detected');
+  const ocrLayout=excel.wordTableRowsWithEvidence(ocrLayoutTable,ocrLayoutPage,1,'ocr',90);
+  assert.equal(ocrLayout.rows[1][2],22960);
+  assert.equal(ocrLayout.evidence[1][2].sourceText,'22,960');
+  assert.equal(ocrLayout.evidence[0][0].ocrConfidence,(80*7+100*2)/9);
+  assert.equal(ocrLayout.evidence[0][0].rotation,90);
+  assertEvidenceInvariant({tables:[{id:'ocr-layout',name:'OCR layout',pageStart:1,pageEnd:1,
+    source:'ocr',method:'ocr-layout',rows:ocrLayout.rows,evidence:ocrLayout.evidence}],pageCount:1});
   assert.equal(extractScannedGridTables(canvas.createCanvas(900,500),ocrLines,900,500).length,0);
   if(process.argv.includes('--runtime')) {
     const worker=await tesseract.createWorker('eng',1,{cachePath:path.resolve('work/image-ocr-qa')});
@@ -225,16 +333,23 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
       const lines=recognitionLines(data), page=buildOcrWordPage(lines,1400,1000,700,500), table=page.blocks.find(block=>block.kind==='table');
       assert.ok(table,'Real OCR should preserve a regular scanned table'); assert.equal(table.rows.length,4); assert.equal(table.rows[0].length,3);
       assert.match(table.rows[1][1].map(lineText).join(' '),/Apples/i); assert.equal(table.rows[2][2].map(lineText).join(' '),'');
-      const ocrRows=table.rows.map(row=>row.map(cell=>excel.inferExcelCellValue(cell.map(lineText).join(' '))));
-      const ocrTable={id:'ocr',name:'OCR table',pageStart:1,pageEnd:1,source:'ocr',rows:ocrRows};
+      const realOcr=excel.wordTableRowsWithEvidence(table,page,1,'ocr',0);
+      const ocrRows=realOcr.rows;
+      const ocrTable={id:'ocr',name:'OCR table',pageStart:1,pageEnd:1,source:'ocr',
+        method:'ocr-layout',rows:ocrRows,evidence:realOcr.evidence};
+      assertEvidenceInvariant({tables:[ocrTable],pageCount:1});
+      const applesEvidence=ocrTable.evidence.flat().find(cell=>cell?.sourceText.match(/Apples/i));
+      assert.ok(applesEvidence && applesEvidence.source==='ocr');
+      assert.ok(Number.isFinite(applesEvidence.ocrConfidence));
       const ocrZip=unzipSync(new Uint8Array(await excel.createExcelWorkbook([ocrTable]).arrayBuffer()));
       const ocrSheet=strFromU8(ocrZip['xl/worksheets/sheet1.xml']);
       assert.match(ocrSheet,/<v>12<\/v>/);assert.match(ocrSheet,/Apples/);
       assert.equal((await excel.createTableCsv(ocrTable).text()).split('\r\n').length,5);
-      console.log('PASS: real OCR reconstructed the scanned 4-row, 3-column table with its blank cell.');
+      console.log('PASS: real OCR reconstructed the scanned table with source geometry and actual confidence.');
     } finally { await worker.terminate(); }
   }
   console.log('PASS: native 3-column table, blank cell, multi-page continuation, no-table fallback, conservative numeric typing, XLSX and CSV exports.');
   console.log('PASS: vector-grid extraction of wide landscape tables, merged group headers, wrapped text, blank cells, total rows, stacked split cells, two-page payroll layout, and merged XLSX export.');
+  console.log('PASS: source provenance for vector-grid, native layout, scanned-grid, OCR layout, numeric coercion, merged cells, rotations, and continuation pages.');
   console.log(JSON.stringify({output,nativeRows:native.tables[0].rows,multiPages:[multi.tables[0].pageStart,multi.tables[0].pageEnd],scannedFixture:path.join(output,'scanned.pdf')}));
 })().catch(error=>{console.error(error);process.exitCode=1;});
