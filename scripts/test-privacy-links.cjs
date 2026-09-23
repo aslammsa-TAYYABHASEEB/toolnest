@@ -8,7 +8,7 @@ Module._resolveFilename=function(id,...args){return resolve.call(this,id.startsW
 globalThis.DOMMatrix=canvas.DOMMatrix;globalThis.ImageData=canvas.ImageData;globalThis.Path2D=canvas.Path2D;
 Promise.try??=(callback,...args)=>Promise.resolve().then(()=>callback(...args));
 const {sanitizePdfExternalLinks}=require('../lib/pdf/privacy-sanitize.ts');
-const {serializedPdfContainsSecret}=require('../lib/pdf/privacy-verify.ts');
+const {serializedPdfContainsSecret,verifyExternalLinkSanitization}=require('../lib/pdf/privacy-verify.ts');
 const {externalLinkStructureSummary}=require('../lib/pdf/privacy-objects.ts');
 const {inspectPdfPrivacy}=require('../lib/pdf/privacy-inspect.ts');
 const N=value=>PDFName.of(value);
@@ -22,6 +22,7 @@ function addAa(dict,pdf,event,value){let aa=resolveDict(pdf,dict.get(N('AA')));i
 function addComment(pdf){pdf.getPage(0).node.addAnnot(pdf.context.register(pdf.context.obj({Type:'Annot',Subtype:'Text',Rect:[140,25,165,50],Contents:PDFString.of('KEEP_COMMENT')})))}
 async function render(pdfjs,bytes){const doc=await pdfjs.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useWorkerFetch:false}).promise;try{const page=await doc.getPage(1),view=page.getViewport({scale:1.25}),surface=canvas.createCanvas(Math.ceil(view.width),Math.ceil(view.height)),ctx=surface.getContext('2d');await page.render({canvas:surface,canvasContext:ctx,viewport:view,background:'rgb(255,255,255)'}).promise;return{pixels:ctx.getImageData(0,0,surface.width,surface.height).data,text:(await page.getTextContent()).items.map(item=>item.str).join(' '),size:[view.width,view.height],rotation:page.rotate,pageCount:doc.numPages}}finally{await doc.loadingTask.destroy()}}
 function pixelDifference(a,b){assert.equal(a.length,b.length);let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);return sum/a.length}
+async function pageCountMismatch(bytes,pages=1){const pdf=await PDFDocument.load(new Uint8Array(bytes),{updateMetadata:false});for(let index=0;index<pages;index++)pdf.addPage([420,280]);return new Uint8Array(await pdf.save({useObjectStreams:false,updateFieldAppearances:false}))}
 
 (async()=>{const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');pdfjs.GlobalWorkerOptions.workerSrc=pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;const open=async file=>pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,useWorkerFetch:false}).promise;
   const cases=[
@@ -47,4 +48,12 @@ function pixelDifference(a,b){assert.equal(a.length,b.length);let sum=0;for(let 
     assert.ok(result.after.findings.some(f=>f.category==='metadata'&&f.evidence?.value==='KEEP_METADATA_AUTHOR'),'metadata not preserved');if(check)await check(parsed,result);const planted=[...Buffer.from(input).toString('latin1').matchAll(/URI_SECRET_[A-Z0-9_.-]+/g)].map(match=>match[0]);for(const secret of planted)assert.ok(!serializedPdfContainsSecret(result.bytes,secret),`${name}: ${secret} survived`);if(name==='orphan URI object')assert.ok(result.cleanup.removed>0);console.log(`PASS: ${name}; selected ${before}->0; removed=${result.cleanup.removed}; pixels=${pixelDifference(beforeRender.pixels,afterRender.pixels).toFixed(4)}`);
   }
   const unsupported=await base(),hidden=uri(unsupported,'PROPRIETARY_17');unsupported.catalog.set(N('PrivateActionContainer'),hidden);const bytes=new Uint8Array(await unsupported.save({useObjectStreams:false,updateFieldAppearances:false})),file=new File([bytes.buffer],'unsupported-uri.pdf',{type:'application/pdf'}),result=await sanitizePdfExternalLinks(file,open);assert.equal(result.verification.externalLinks,'removal-failed');assert.ok(externalLinkStructureSummary(await PDFDocument.load(result.bytes,{updateMetadata:false})).uriActions>0);console.log('PASS: proprietary reachable URI container reports removal-failed, never verified');
+  const mismatchSource=await base();annotation(mismatchSource,uri(mismatchSource,'PAGE_MISMATCH_30'));const mismatchBytes=new Uint8Array(await mismatchSource.save({useObjectStreams:false,updateFieldAppearances:false})),mismatchFile=new File([mismatchBytes.buffer],'page-count-mismatch.pdf',{type:'application/pdf'}),mismatchBefore=await inspectPdfPrivacy(mismatchFile,open),mismatchScan=await sanitizePdfExternalLinks(mismatchFile,open);
+  assert.equal(mismatchScan.verification.externalLinks,'verified-removed','page-count fixture was not otherwise clean');
+  const mismatchResult=await verifyExternalLinkSanitization(mismatchFile,await pageCountMismatch(mismatchScan.bytes),mismatchBefore,['URI_SECRET_PAGE_MISMATCH_30'],open),mismatchStatus=mismatchResult.verification;
+  assert.equal(mismatchBefore.pageCount,1,'source page count');assert.equal(mismatchResult.inspection.pageCount,2,'mismatched output page count');assert.equal(mismatchStatus.parseable,true,'mismatched output must stay parseable');assert.equal(mismatchStatus.pageCountPreserved,false,'page-count mismatch was not detected');
+  assert.equal(mismatchStatus.remainingExternalLinkFindings,0,'external-link findings must not explain the mismatch failure');assert.equal(mismatchStatus.remainingExternalLinkStructures,0,'external-link structures must not explain the mismatch failure');assert.equal(mismatchResult.inspection.findings.filter(f=>f.category==='external-link').length,0,'external-link findings must not explain the mismatch failure');
+  assert.equal(mismatchStatus.externalLinks,'removal-failed','external-link verification ignored the page-count mismatch');
+  assert.ok(mismatchStatus.warnings.some(value=>/page count differs/.test(value)),'page-count mismatch warning missing');assert.ok(!mismatchStatus.warnings.some(value=>/unreachable output object/.test(value)),'mismatch fixture must stay free of unreachable objects');
+  console.log('PASS: external-link verification reports removal-failed when a parseable output has the wrong page count');
 })().catch(error=>{console.error(error);process.exitCode=1});

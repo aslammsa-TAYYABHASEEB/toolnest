@@ -105,8 +105,10 @@ export async function verifyMetadataSanitization(
     const pageCountPreserved = parsed.getPageCount() === before.pageCount;
     if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
     return { inspection, verification: {
-      metadata: infoAbsent && metadataFindings === 0 && residuals.infoValues === 0 && !reachability.unreachable.length ? "verified-removed" : "removal-failed",
-      xmp: xmpAbsent && xmpFindings === 0 && residuals.xmpContainers === 0 && !reachability.unreachable.length ? "verified-removed" : "removal-failed",
+      metadata: infoAbsent && metadataFindings === 0 && residuals.infoValues === 0 && !reachability.unreachable.length &&
+        pageCountPreserved ? "verified-removed" : "removal-failed",
+      xmp: xmpAbsent && xmpFindings === 0 && residuals.xmpContainers === 0 && !reachability.unreachable.length &&
+        pageCountPreserved ? "verified-removed" : "removal-failed",
       pageCountPreserved, parseable: true, remainingMetadataFindings: metadataFindings + xmpFindings, warnings,
     } };
   } catch (error) {
@@ -140,7 +142,7 @@ export async function verifyAttachmentSanitization(
     const pageCountPreserved = parsed.getPageCount() === before.pageCount;
     if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
     return { inspection, verification: { attachments: findings === 0 && structureCount === 0 && byteMatches === 0 &&
-      !reachability.unreachable.length ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
+      !reachability.unreachable.length && pageCountPreserved ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
       remainingAttachmentFindings: findings, remainingAttachmentStructures: structureCount, warnings } };
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
@@ -173,7 +175,7 @@ export async function verifyActiveActionSanitization(
     const pageCountPreserved = parsed.getPageCount() === before.pageCount;
     if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
     return { inspection, verification: { activeContent: findings === 0 && structureCount === 0 && byteMatches === 0 &&
-      !reachability.unreachable.length ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
+      !reachability.unreachable.length && pageCountPreserved ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
       remainingActiveContentFindings: findings, remainingActiveContentStructures: structureCount, warnings } };
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
@@ -222,7 +224,7 @@ export async function verifyExternalLinkSanitization(
     const pageCountPreserved = parsed.getPageCount() === before.pageCount;
     if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
     return { inspection, verification: { externalLinks: findings === 0 && structureCount === 0 && byteMatches === 0 &&
-      !reachability.unreachable.length ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
+      !reachability.unreachable.length && pageCountPreserved ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
       remainingExternalLinkFindings: findings, remainingExternalLinkStructures: structureCount, warnings } };
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
@@ -257,7 +259,7 @@ export async function verifyAnnotationSanitization(
     const pageCountPreserved = parsed.getPageCount() === before.pageCount;
     if (!pageCountPreserved) warnings.push("The output page count differs from the input.");
     return { inspection, verification: { annotations: findings === 0 && structureCount === 0 && byteMatches === 0 &&
-      !reachability.unreachable.length ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
+      !reachability.unreachable.length && pageCountPreserved ? "verified-removed" : "removal-failed", pageCountPreserved, parseable: true,
       remainingCommentFindings: findings, remainingCommentStructures: structureCount, warnings } };
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : "The saved PDF could not be verified.");
