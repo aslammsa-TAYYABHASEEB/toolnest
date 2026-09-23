@@ -130,16 +130,20 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
   const top = fullWithin[0].coordinate;
   const bottom = fullWithin.at(-1)!.coordinate;
   if (bottom - top < 20) return [];
-  const xEdges = [left, ...inner.filter(band => covered(band, top + 2, bottom - 2) ||
-    band.segments.reduce((sum, segment) => sum + overlap(segment, top, bottom), 0) > (bottom - top) * .45)
-    .map(band => band.coordinate), right].sort((a, b) => a - b);
-  const x = xEdges.filter((edge, index) => !index || edge - xEdges[index - 1] > 2);
-  if (x.length < 4 || x.length > 65) return [];
   const y = horizontal.filter(band => band.coordinate >= top - 1 && band.coordinate <= bottom + 1 &&
     band.segments.some(segment => overlap(segment, left, right) > Math.min(15, (right - left) * .04)))
     .map(band => band.coordinate).sort((a, b) => a - b)
     .filter((edge, index, array) => !index || edge - array[index - 1] > 2);
   if (y.length < 4 || y.length > 300) return [];
+  const boundsRowInterval = (band: Band) => y.slice(0, -1).some((rowTop, row) =>
+    band.segments.some(segment => segment.start <= rowTop + 2.5 && segment.end >= y[row + 1] - 2.5));
+  const xEdges = [left, ...inner.filter(band =>
+    covered(band, top + 2, bottom - 2) ||
+    band.segments.reduce((sum, segment) => sum + overlap(segment, top, bottom), 0) > (bottom - top) * .45 ||
+    boundsRowInterval(band))
+    .map(band => band.coordinate), right].sort((a, b) => a - b);
+  const x = xEdges.filter((edge, index) => !index || edge - xEdges[index - 1] > 2);
+  if (x.length < 4 || x.length > 65) return [];
   const rows = y.length - 1, columns = x.length - 1;
   const parent = Array.from({ length: rows * columns }, (_, index) => index);
   const root = (index: number): number => {

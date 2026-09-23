@@ -124,6 +124,30 @@ async function numericEvidenceFixture() {
   drawGrid(page,font,[['Label','Account','Amount'],['Current','A1','22,960'],['Previous','A2','1,234.50']],{x:40,y:550,widths:[100,100,120],rowHeight:42});
   return pdf.save();
 }
+async function irregularSpanningFixture() {
+  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica),page=pdf.addPage([500,760]);
+  const x=[50,140,250,340,450],top=650,rowHeight=36,rows=8;
+  for(let row=0;row<=rows;row++) page.drawLine({start:{x:x[0],y:top-row*rowHeight},end:{x:x.at(-1),y:top-row*rowHeight},thickness:1});
+  for(const edge of [x[0],x.at(-1)]) page.drawLine({start:{x:edge,y:top},end:{x:edge,y:top-rows*rowHeight},thickness:1});
+  const divider=(edge,startRow,endRow)=>page.drawLine({
+    start:{x:edge,y:top-startRow*rowHeight},end:{x:edge,y:top-endRow*rowHeight},thickness:1,
+  });
+  divider(x[1],0,2);
+  divider(x[2],0,2);
+  divider(x[3],0,2);
+  divider(x[3],4,5);
+  const text=(value,column,row)=>page.drawText(value,{x:x[column]+6,y:top-row*rowHeight-23,size:10,font});
+  ['Item','Period','Rate','Total'].forEach((value,column)=>text(value,column,0));
+  ['1000','x','6','6000'].forEach((value,column)=>text(value,column,1));
+  text('Subtotal 6000',0,2);
+  text('Tax due',0,4);
+  text('75',3,4);
+  text('Calculation explanation',0,5);
+  text('Final statement',0,6);
+  page.drawText('Neighboring prose must stay outside the table.',{x:50,y:710,size:11,font});
+  page.drawText('Footer prose is not a table row.',{x:50,y:320,size:11,font});
+  return pdf.save();
+}
 async function scannedFixture() {
   const image=canvas.createCanvas(1400,1000), context=image.getContext('2d');
   context.fillStyle='#fff';context.fillRect(0,0,image.width,image.height);context.font='52px Arial';context.fillStyle='#111';
@@ -174,7 +198,7 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
     }));
     return {tables,pageCount:pages.length,scannedPageCount:0};
   }
-  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture(), numeric:await numericEvidenceFixture() };
+  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture(), numeric:await numericEvidenceFixture(), irregular:await irregularSpanningFixture() };
   for(const [name,bytes] of Object.entries(fixtures)) fs.writeFileSync(path.join(output,`${name}.pdf`),bytes);
   const routedMulti=await excel.extractPdfTables(file(fixtures.multi,'multi.pdf'));
   assert.equal(routedMulti.tables.length,1,'real routing must retain one continued table');
@@ -182,6 +206,23 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   assert.equal(routedMulti.tables[0].rows.length,6);
   assert.deepEqual([...new Set(routedMulti.tables[0].evidence.flat().filter(Boolean).map(cell=>cell.page))],[1,2]);
   assert.equal(routedMulti.scannedPageCount,0,'strong sparse native grids must not be misrouted to OCR');
+  const irregular=await excel.extractPdfTables(file(fixtures.irregular,'irregular-spanning.pdf'));
+  assert.equal(irregular.tables.length,1,'row-local dividers must recover one irregular ruled table');
+  assert.equal(irregular.scannedPageCount,0,'native irregular grids must not be routed to OCR');
+  const irregularTable=irregular.tables[0];
+  assert.equal(irregularTable.method,'vector-grid');
+  assert.deepEqual([irregularTable.pageStart,irregularTable.pageEnd],[1,1]);
+  assert.equal(irregularTable.rows.length,8);
+  assert.equal(irregularTable.rows[0].length,4);
+  assert.deepEqual(irregularTable.rows[1],[1000,'x',6,6000]);
+  assert.deepEqual(irregularTable.rows[4],['Tax due','','',75]);
+  assert.ok(irregularTable.merges.some(merge=>merge.startRow===2&&merge.endRow===2&&merge.startColumn===0&&merge.endColumn===3));
+  assert.ok(irregularTable.merges.some(merge=>merge.startRow===4&&merge.endRow===4&&merge.startColumn===0&&merge.endColumn===2));
+  assert.ok(irregularTable.merges.some(merge=>merge.startRow===7&&merge.endRow===7&&merge.startColumn===0&&merge.endColumn===3));
+  assert.equal(irregularTable.evidence[4][3].sourceText,'75');
+  assert.ok(Math.abs(irregularTable.evidence[4][3].bbox.left-340/500)<.01);
+  assert.ok(!irregularTable.rows.flat().join(' ').includes('Neighboring prose'));
+  assertEvidenceInvariant(irregular);
   const native=await extractNative(fixtures.native);
   assert.equal(native.tables.length,1); assert.equal(native.tables[0].rows.length,4); assert.equal(native.tables[0].rows[0].length,3);
   assert.equal(native.tables[0].rows[2][1],''); assert.equal(native.tables[0].rows[1][2],25.5); assert.equal(native.tables[0].rows[1][0],1001);
