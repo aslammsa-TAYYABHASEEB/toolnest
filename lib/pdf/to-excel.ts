@@ -146,6 +146,32 @@ export function scannedTableEvidence(
     page: pageNumber, source: "ocr" as const, rotation } : null));
 }
 
+function vectorContinuationSignature(table: ExtractedPdfTable) {
+  const columns = table.rows[0]?.length ?? 0;
+  const row = table.evidence?.find(cells => cells.length === columns && cells.every(Boolean));
+  return row?.map(cell => cell ? [cell.bbox.left, cell.bbox.left + cell.bbox.width] as const : null) ?? null;
+}
+
+function isVectorContinuation(previous: ExtractedPdfTable | undefined, current: ExtractedPdfTable) {
+  if (!previous || previous.method !== "vector-grid" || current.method !== "vector-grid" ||
+    previous.pageEnd + 1 !== current.pageStart || previous.rows[0]?.length !== current.rows[0]?.length) return false;
+  const previousKey = Number.parseInt(String(previous.rows.at(-1)?.[0] ?? ""), 10);
+  const currentKey = Number.parseInt(String(current.rows[0]?.[0] ?? ""), 10);
+  if (!Number.isFinite(previousKey) || currentKey !== previousKey + 1) return false;
+  const priorEvidence = previous.evidence?.flat().filter((cell): cell is PdfCellEvidence => Boolean(cell)) ?? [];
+  const currentEvidence = current.evidence?.flat().filter((cell): cell is PdfCellEvidence => Boolean(cell)) ?? [];
+  if (!priorEvidence.length || !currentEvidence.length) return false;
+  const priorBottom = Math.max(...priorEvidence.map(cell => cell.bbox.top + cell.bbox.height));
+  const currentTop = Math.min(...currentEvidence.map(cell => cell.bbox.top));
+  if (priorBottom < .9 || currentTop > .1) return false;
+  const priorColumns = vectorContinuationSignature(previous);
+  const currentColumns = vectorContinuationSignature(current);
+  return Boolean(priorColumns && currentColumns && priorColumns.length === currentColumns.length &&
+    priorColumns.every((column, index) => column && currentColumns[index] &&
+      Math.abs(column[0] - currentColumns[index]![0]) <= .02 &&
+      Math.abs(column[1] - currentColumns[index]![1]) <= .02));
+}
+
 function safeSheetName(name: string, used: Set<string>) {
   const base = (name.replace(/[\\/*?:[\]]/g, " ").replace(/\s+/g, " ").trim() || "Table").slice(0, 31);
   let candidate = base;
@@ -238,6 +264,23 @@ export async function extractPdfTables(
         onProgress?.(pageNumber, document.numPages, "analyzing");
         const textContent = await page.getTextContent();
         const characters = textContent.items.reduce((count, item) => count + ("str" in item ? item.str.trim().length : 0), 0);
+        // A sparse native page can still contain a real table (for example, a
+        // continuation with short numeric cells). Keep conservative native
+        // candidates so failed OCR cannot silently discard that page.
+        const sparseVectorTables = characters > 0 && characters < 25
+          ? await extractVectorGridTables(page, textContent)
+          : [];
+        if (sparseVectorTables.length) {
+          vectorPages.set(pageNumber, sparseVectorTables);
+          const viewport = page.getViewport({ scale: 1 });
+          pages.push({ width: viewport.width, height: viewport.height, left: 0,
+            right: viewport.width, top: 0, blocks: [] });
+          sources.push("native");
+          continue;
+        }
+        const sparseNativePage = characters > 0 && characters < 25
+          ? await extractWordPage(page, textContent)
+          : null;
         if (characters >= 25) {
           const vectorTables = await extractVectorGridTables(page, textContent);
           if (vectorTables.length) {
@@ -270,8 +313,16 @@ export async function extractPdfTables(
           if (gridCanvas !== baseGridCanvas) { gridCanvas.width = 0; gridCanvas.height = 0; }
           baseGridCanvas.width = 0; baseGridCanvas.height = 0;
         }
-        pages.push(recognized.page);
-        sources.push("ocr");
+        const ocrHasTable = (scannedGridPages.get(pageNumber)?.length ?? 0) > 0 ||
+          recognized.page.blocks.some(block => block.kind === "table");
+        const nativeHasTable = sparseNativePage?.blocks.some(block => block.kind === "table") ?? false;
+        if (!ocrHasTable && nativeHasTable && sparseNativePage) {
+          pages.push(sparseNativePage);
+          sources.push("native");
+        } else {
+          pages.push(recognized.page);
+          sources.push("ocr");
+        }
       } finally { page.cleanup(); }
     }
     markTableContinuations(pages);
@@ -279,14 +330,26 @@ export async function extractPdfTables(
     pages.forEach((page, pageIndex) => {
       const vectorTables = vectorPages.get(pageIndex + 1);
       if (vectorTables) {
-        for (const vector of vectorTables) tables.push({
-          id: "table-" + (tables.length + 1), name: "Table " + (tables.length + 1),
-          pageStart: pageIndex + 1, pageEnd: pageIndex + 1, source: "native", method: "vector-grid",
-          rows: vector.rows.map(row => row.map((cell, column) => inferExcelCellValue(cell,
-            vector.rows.slice(0, vector.headerRows).map(header => header[column]).join(" ")))),
-          evidence: vectorTableEvidence(vector, pageIndex + 1),
-          merges: vector.merges, headerRows: vector.headerRows,
-        });
+        for (const vector of vectorTables) {
+          const current: ExtractedPdfTable = {
+            id: "table-" + (tables.length + 1), name: "Table " + (tables.length + 1),
+            pageStart: pageIndex + 1, pageEnd: pageIndex + 1, source: "native", method: "vector-grid",
+            rows: vector.rows.map(row => row.map((cell, column) => inferExcelCellValue(cell,
+              vector.rows.slice(0, vector.headerRows).map(header => header[column]).join(" ")))),
+            evidence: vectorTableEvidence(vector, pageIndex + 1),
+            merges: vector.merges, headerRows: vector.headerRows,
+          };
+          const previous = tables[tables.length - 1];
+          if (isVectorContinuation(previous, current)) {
+            const rowOffset = previous.rows.length;
+            previous.rows.push(...current.rows);
+            previous.evidence?.push(...(current.evidence ?? []));
+            previous.merges?.push(...(current.merges ?? []).map(merge => ({
+              ...merge, startRow: merge.startRow + rowOffset, endRow: merge.endRow + rowOffset,
+            })));
+            previous.pageEnd = current.pageEnd;
+          } else tables.push(current);
+        }
         return;
       }
       const scannedGrids = scannedGridPages.get(pageIndex + 1);

@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PdfToExcelSourceReview } from "@/components/pdf-to-excel-source-review";
 import { PdfUploader } from "@/components/pdf-tool/pdf-uploader";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PdfProcessingError, toPdfProcessingError } from "@/lib/pdf/errors";
 import { makeExcelFilename, makeTableCsvFilename } from "@/lib/pdf/filenames";
 import { readPdfMetadata } from "@/lib/pdf/metadata";
+import {
+  SOURCE_REVIEW_COPY,
+  describeSourceReviewSelection,
+  firstEvidenceCell,
+  type SourceReviewCell,
+} from "@/lib/pdf/source-review";
 import {
   createExcelWorkbook,
   createTableCsv,
@@ -29,6 +36,7 @@ export function PdfToExcel() {
   const [result, setResult] = useState<PdfTableExtractionResult | null>(null);
   const [tables, setTables] = useState<ExtractedPdfTable[]>([]);
   const [selected, setSelected] = useState(0);
+  const [activeCell, setActiveCell] = useState<SourceReviewCell | null>(null);
   const [progress, setProgress] = useState<{ current: number; total: number; phase: PdfToExcelProgressPhase; part?: number } | null>(null);
   const [xlsxUrl, setXlsxUrl] = useState<string | null>(null);
   const [csvUrl, setCsvUrl] = useState<string | null>(null);
@@ -70,6 +78,13 @@ export function PdfToExcel() {
   }
 
   const table = tables[selected];
+  // Source Review follows the active table; editing a row must never move the selection.
+  useEffect(() => {
+    setActiveCell(firstEvidenceCell(tables[selected]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, table?.id, result]);
+  const selection = describeSourceReviewSelection(table, activeCell);
+
   useEffect(() => {
     if (csvUrl) URL.revokeObjectURL(csvUrl);
     setCsvUrl(table ? URL.createObjectURL(createTableCsv(table)) : null);
@@ -111,7 +126,7 @@ export function PdfToExcel() {
       {tables.length === 0 ? <Card className="pdf-excel-empty"><strong>No clear tables found</strong><p>The PDF was read successfully, but no regular table structure could be identified confidently. Try a PDF with clearer rows and columns.</p></Card> : <>
         <div className="pdf-excel-summary"><div><strong>{tables.length} table{tables.length === 1 ? "" : "s"} found</strong><p>{result.pageCount} page{result.pageCount === 1 ? "" : "s"}{result.scannedPageCount ? ` · OCR used on ${result.scannedPageCount}` : " · Selectable text"}</p></div>{xlsxUrl && <a className={buttonClassName()} href={xlsxUrl} download={makeExcelFilename(source?.file.name ?? "document.pdf")}>Download Excel (.xlsx)</a>}</div>
         <div className="pdf-excel-tabs" role="tablist" aria-label="Extracted tables">{tables.map((item, index) => <button type="button" role="tab" aria-selected={selected === index} className={selected === index ? "is-active" : ""} key={item.id} onClick={() => setSelected(index)}>{item.name}<small>p. {item.pageStart}{item.pageEnd > item.pageStart ? `–${item.pageEnd}` : ""}</small></button>)}</div>
-        {table && <Card className="pdf-excel-preview"><div className="pdf-excel-preview-head"><div><strong>{table.name}</strong><span>{table.rows.length} rows · {Math.max(0, ...table.rows.map((row) => row.length))} columns · {table.source === "ocr" ? "OCR" : "PDF text"}</span></div>{csvUrl && <a className={buttonClassName({ variant: "secondary" })} href={csvUrl} download={makeTableCsvFilename(source?.file.name ?? "document.pdf", table.name)}>Download this table (.csv)</a>}</div><p className="pdf-excel-edit-note">Review and edit cells before downloading. Changes are kept only in this browser session.</p><div className="pdf-excel-table-scroll"><table><tbody>{table.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex}><textarea aria-label={`${table.name}, row ${rowIndex + 1}, column ${columnIndex + 1}`} rows={String(cell).includes("\n") ? 2 : 1} value={String(cell)} onChange={(event) => editCell(rowIndex, columnIndex, event.target.value)} /></td>)}</tr>)}</tbody></table></div></Card>}
+        {table && <Card className="pdf-excel-preview"><div className="pdf-excel-preview-head"><div><strong>{table.name}</strong><span>{table.rows.length} rows · {Math.max(0, ...table.rows.map((row) => row.length))} columns · {table.source === "ocr" ? "OCR" : "PDF text"}</span></div>{csvUrl && <a className={buttonClassName({ variant: "secondary" })} href={csvUrl} download={makeTableCsvFilename(source?.file.name ?? "document.pdf", table.name)}>Download this table (.csv)</a>}</div><p className="pdf-excel-edit-note">Review and edit cells before downloading. Changes are kept only in this browser session.</p><div className="pdf-excel-review-head"><h3 className="pdf-excel-review-title" id="pdf-to-excel-source-review-title">{SOURCE_REVIEW_COPY.heading}</h3><p className="pdf-excel-review-instruction">{SOURCE_REVIEW_COPY.instruction}</p></div><div className="pdf-excel-review"><section className="pdf-excel-review-source" aria-labelledby="pdf-to-excel-source-review-title">{source && <PdfToExcelSourceReview file={source.file} totalPages={result?.pageCount ?? source.pageCount} evidence={selection.evidence} notice={selection.notice} cell={selection.cell} mergedAnchor={selection.mergedAnchor} />}</section><section className="pdf-excel-review-table"><div className="pdf-excel-table-scroll"><table><tbody>{table.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex} className={activeCell?.row === rowIndex && activeCell.column === columnIndex ? "is-source-selected" : undefined}><textarea aria-label={`${table.name}, row ${rowIndex + 1}, column ${columnIndex + 1}`} rows={String(cell).includes("\n") ? 2 : 1} value={String(cell)} onFocus={() => setActiveCell({ row: rowIndex, column: columnIndex })} onClick={() => setActiveCell({ row: rowIndex, column: columnIndex })} onChange={(event) => editCell(rowIndex, columnIndex, event.target.value)} /></td>)}</tr>)}</tbody></table></div></section></div></Card>}
       </>}
     </div>}
 

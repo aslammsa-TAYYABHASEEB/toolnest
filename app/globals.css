@@ -1066,6 +1066,36 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .pdf-excel-table-scroll textarea:focus { position: relative; outline: 2px solid var(--color-focus); outline-offset: -2px; }
 @media (max-width: 40rem) { .pdf-excel-summary > .ui-button, .pdf-excel-preview-head > .ui-button { width: 100%; } .pdf-excel-table-scroll td, .pdf-excel-table-scroll textarea { min-width: 8rem; } }
 
+/* PDF to Excel — Source Review workspace */
+.pdf-excel-review-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
+.pdf-excel-review-title { margin: 0; font-size: var(--text-lg); }
+.pdf-excel-review-instruction { margin: 0; color: var(--color-text-muted); font-size: var(--text-sm); }
+.pdf-excel-review { display: grid; gap: var(--space-4); min-width: 0; margin-top: var(--space-3); }
+.pdf-excel-review-source, .pdf-excel-review-table { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
+.pdf-excel-review-table .pdf-excel-table-scroll { margin-top: 0; }
+.pdf-excel-source-viewer { display: grid; gap: var(--space-3); min-width: 0; }
+.pdf-excel-source-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.pdf-excel-source-toolbar-label { color: var(--color-text-muted); font-size: var(--text-xs); font-weight: 750; }
+.pdf-excel-source-zoom { display: flex; align-items: center; gap: var(--space-1); }
+.pdf-excel-source-zoom .ui-button { min-width: 2.375rem; padding-inline: var(--space-2); }
+.pdf-excel-source-zoom-value { min-width: 3.25rem; color: var(--color-text-muted); font-size: var(--text-xs); font-weight: 750; font-variant-numeric: tabular-nums; text-align: center; }
+.pdf-excel-source-viewport { max-width: 100%; max-height: 30rem; overflow: auto; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.pdf-excel-source-page { position: relative; width: max-content; margin-inline: auto; background: #fff; box-shadow: var(--shadow-sm); }
+.pdf-excel-source-canvas { display: block; background: #fff; }
+.pdf-excel-source-highlight { position: absolute; border: 2px solid var(--color-brand-500); border-radius: .1875rem; background: color-mix(in srgb, var(--color-brand-500) 16%, transparent); pointer-events: none; }
+.pdf-excel-source-notice, .pdf-excel-source-status { margin: 0; padding: var(--space-3); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface-muted); color: var(--color-text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.pdf-excel-source-status { border-style: solid; }
+.pdf-excel-source-details { display: grid; gap: .15rem; min-width: 0; font-size: var(--text-sm); }
+.pdf-excel-source-details-lead { margin: 0; font-weight: 700; }
+.pdf-excel-source-details-cell { margin: 0; color: var(--color-text-muted); font-size: var(--text-xs); }
+.pdf-excel-source-details-label { margin: var(--space-2) 0 0; color: var(--color-text-muted); font-size: var(--text-xs); font-weight: 750; }
+.pdf-excel-source-text { margin: 0; max-height: 7rem; overflow: auto; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--text-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pdf-excel-table-scroll tr td.is-source-selected { background: color-mix(in srgb, var(--color-brand-500) 10%, transparent); box-shadow: inset .1875rem 0 0 0 var(--color-brand-500), inset 0 0 0 1px var(--color-brand-500); }
+
+@media (min-width: 56.25rem) {
+  .pdf-excel-review { grid-template-columns: minmax(0, 45fr) minmax(0, 55fr); align-items: start; }
+}
+
 @media (min-width: 48rem) {
   .privacy-summary-card { grid-template-columns: minmax(0, 1fr) minmax(17rem, .8fr); align-items: center; }
   .privacy-recommended-card { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }

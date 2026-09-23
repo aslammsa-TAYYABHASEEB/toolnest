@@ -16,6 +16,14 @@ globalThis.document = { createElement(name) {
   value.toBlob = callback => callback(new Blob([value.toBuffer('image/png')], { type:'image/png' }));
   return value;
 } };
+// Exercise the real extractPdfTables pipeline in Node with the established
+// legacy PDF.js adapter; production still uses the hardened central loader.
+const testRenderer = require('../lib/pdf/renderer.ts');
+testRenderer.loadPdfRendererDocument = async file => {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  return await pdfjs.getDocument({ data:new Uint8Array(await file.arrayBuffer()),
+    enableScripting:false, isEvalSupported:false, useWorkerFetch:false }).promise;
+};
 const excel = require('../lib/pdf/to-excel.ts');
 const { extractWordPage } = require('../lib/pdf/word-extraction.ts');
 const { lineText, markTableContinuations } = require('../lib/pdf/word-layout.ts');
@@ -168,6 +176,12 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   }
   const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture(), numeric:await numericEvidenceFixture() };
   for(const [name,bytes] of Object.entries(fixtures)) fs.writeFileSync(path.join(output,`${name}.pdf`),bytes);
+  const routedMulti=await excel.extractPdfTables(file(fixtures.multi,'multi.pdf'));
+  assert.equal(routedMulti.tables.length,1,'real routing must retain one continued table');
+  assert.deepEqual([routedMulti.tables[0].pageStart,routedMulti.tables[0].pageEnd],[1,2]);
+  assert.equal(routedMulti.tables[0].rows.length,6);
+  assert.deepEqual([...new Set(routedMulti.tables[0].evidence.flat().filter(Boolean).map(cell=>cell.page))],[1,2]);
+  assert.equal(routedMulti.scannedPageCount,0,'strong sparse native grids must not be misrouted to OCR');
   const native=await extractNative(fixtures.native);
   assert.equal(native.tables.length,1); assert.equal(native.tables[0].rows.length,4); assert.equal(native.tables[0].rows[0].length,3);
   assert.equal(native.tables[0].rows[2][1],''); assert.equal(native.tables[0].rows[1][2],25.5); assert.equal(native.tables[0].rows[1][0],1001);

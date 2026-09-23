@@ -1,0 +1,137 @@
+import type { ExcelCellValue, ExtractedPdfTable, PdfCellEvidence, PdfSourceBox } from "./to-excel";
+import type { GridMerge } from "./vector-table";
+
+/** Bounded Source Review zoom so a large page cannot allocate a giant canvas. */
+export const SOURCE_REVIEW_MIN_ZOOM = 0.75;
+export const SOURCE_REVIEW_MAX_ZOOM = 2;
+export const SOURCE_REVIEW_ZOOM_STEP = 0.25;
+/** Retina rendering is clamped: 3x device pixels are not needed for cell review. */
+export const SOURCE_REVIEW_MAX_PIXEL_RATIO = 2;
+
+export type SourceReviewCell = { row: number; column: number };
+export type SourceReviewNotice = "none" | "no-source-location" | "merged-subordinate";
+
+export const SOURCE_REVIEW_COPY = {
+  heading: "Source Review",
+  instruction: "Select a cell to see where it came from in the PDF.",
+  location: "Source location",
+  noSource: "No source location is available for this cell.",
+  mergedSubordinate: "No separate source location is stored for this merged cell.",
+  sourceText: "Source text",
+  loading: "Loading the source page…",
+  error: "The source page could not be rendered.",
+} as const;
+
+export function clampSourceReviewZoom(value: number) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(SOURCE_REVIEW_MAX_ZOOM,
+    Math.max(SOURCE_REVIEW_MIN_ZOOM, Math.round(value * 100) / 100));
+}
+
+export function clampSourceReviewPixelRatio(value: number) {
+  if (!Number.isFinite(value) || value < 1) return 1;
+  return Math.min(SOURCE_REVIEW_MAX_PIXEL_RATIO, value);
+}
+
+/**
+ * Display rotation for Source Review: the intrinsic PDF.js page rotation plus the
+ * additional clockwise correction stored with OCR evidence.
+ * For the supported quarter turns this equals (page.rotate + (evidence.rotation ?? 0)) % 360.
+ */
+export function sourceReviewRotation(pageRotation: number, evidenceRotation = 0) {
+  const total = (Number.isFinite(pageRotation) ? pageRotation : 0) +
+    (Number.isFinite(evidenceRotation) ? evidenceRotation : 0);
+  const wrapped = ((total % 360) + 360) % 360;
+  return (Math.round(wrapped / 90) * 90) % 360;
+}
+
+export function isEmptySourceCell(value: ExcelCellValue | undefined) {
+  return String(value ?? "").trim() === "";
+}
+
+export function cellEvidence(table: ExtractedPdfTable | undefined, row: number, column: number) {
+  return table?.evidence?.[row]?.[column] ?? null;
+}
+
+/** First non-empty cell that actually carries provenance. */
+export function firstEvidenceCell(table: ExtractedPdfTable | undefined): SourceReviewCell | null {
+  if (!table?.rows.length) return null;
+  for (let row = 0; row < table.rows.length; row++) {
+    const columns = table.rows[row]?.length ?? 0;
+    for (let column = 0; column < columns; column++) {
+      if (isEmptySourceCell(table.rows[row][column])) continue;
+      if (cellEvidence(table, row, column)) return { row, column };
+    }
+  }
+  return null;
+}
+
+export function mergeContaining(table: ExtractedPdfTable | undefined, row: number, column: number): GridMerge | null {
+  for (const merge of table?.merges ?? []) {
+    if (row >= merge.startRow && row <= merge.endRow &&
+      column >= merge.startColumn && column <= merge.endColumn) return merge;
+  }
+  return null;
+}
+
+/** Deterministic merged anchor for a subordinate merged cell; null for anchors themselves. */
+export function mergeAnchorCell(table: ExtractedPdfTable | undefined, row: number, column: number): SourceReviewCell | null {
+  const merge = mergeContaining(table, row, column);
+  if (!merge || (merge.startRow === row && merge.startColumn === column)) return null;
+  return { row: merge.startRow, column: merge.startColumn };
+}
+
+export type SourceReviewSelection = {
+  cell: SourceReviewCell | null;
+  evidence: PdfCellEvidence | null;
+  notice: SourceReviewNotice;
+  mergedAnchor: SourceReviewCell | null;
+};
+
+export function describeSourceReviewSelection(
+  table: ExtractedPdfTable | undefined,
+  cell: SourceReviewCell | null,
+): SourceReviewSelection {
+  if (!table || !cell) return { cell: cell ?? null, evidence: null, notice: "no-source-location", mergedAnchor: null };
+  const evidence = cellEvidence(table, cell.row, cell.column);
+  if (evidence) return { cell, evidence, notice: "none", mergedAnchor: null };
+  const mergedAnchor = mergeAnchorCell(table, cell.row, cell.column);
+  return { cell, evidence: null, notice: mergedAnchor ? "merged-subordinate" : "no-source-location", mergedAnchor };
+}
+
+export function sourceReviewNoticeMessage(selection: SourceReviewSelection) {
+  if (selection.notice === "merged-subordinate") return SOURCE_REVIEW_COPY.mergedSubordinate;
+  if (selection.notice === "no-source-location") return SOURCE_REVIEW_COPY.noSource;
+  return null;
+}
+
+function percent(value: number) {
+  const clamped = Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
+  return `${Math.round(clamped * 10000) / 100}%`;
+}
+
+/** Normalized (0..1, top-left origin) evidence box as CSS percentages of the rendered page. */
+export function sourceReviewBoxStyle(box: PdfSourceBox) {
+  const left = Math.min(1, Math.max(0, Number.isFinite(box.left) ? box.left : 0));
+  const width = Math.min(Number.isFinite(box.width) ? box.width : 0, 1 - left);
+  return { left: percent(left), top: percent(box.top), width: percent(width), height: percent(box.height) };
+}
+
+export function sourceReviewSourceLabel(evidence: PdfCellEvidence) {
+  return evidence.source === "ocr" ? "OCR" : "PDF text";
+}
+
+/** Only actual OCR confidence is reported; native PDF text never gets an invented score. */
+export function sourceReviewOcrConfidence(evidence: PdfCellEvidence) {
+  if (evidence.source !== "ocr") return null;
+  if (typeof evidence.ocrConfidence !== "number" || !Number.isFinite(evidence.ocrConfidence)) return null;
+  return `OCR confidence: ${Math.round(evidence.ocrConfidence)}%`;
+}
+
+export function sourceReviewPageLabel(page: number, totalPages: number) {
+  return totalPages > 0 ? `Page ${page} of ${totalPages}` : `Page ${page}`;
+}
+
+export function sourceReviewCellLabel(cell: SourceReviewCell | null) {
+  return cell ? `Row ${cell.row + 1} · Column ${cell.column + 1}` : "";
+}
