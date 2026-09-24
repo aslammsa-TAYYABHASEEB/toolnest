@@ -1,5 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { PdfProcessingError } from "@/lib/pdf/errors";
+import { isIdentifierLikeColumnHeading, parseConservativeNumericLiteral } from "@/lib/pdf/cell-semantics";
 import { renderPageToCanvasForOcr, rotateCanvas } from "@/lib/pdf/ocr-render";
 import { extractScannedGridTables, type ScannedGridTable } from "@/lib/pdf/scanned-table";
 import { createPdfOcrEngine, recognizePdfPage, type PdfOcrEngine } from "@/lib/pdf/to-word";
@@ -67,13 +68,8 @@ const xmlEscape = (value: string) => value
 /** Keep identifiers as text; only complete, unambiguous quantities become numbers. */
 export function inferExcelCellValue(text: string, columnHeading = ""): ExcelCellValue {
   const value = text.trim();
-  if (/\b(?:account|acct|a\/c|ecr|employee\s*(?:id|no|number|code)|reference|ref|code|serial|sr\.?\s*no)\b/i.test(columnHeading)) return value;
-  const accountingNegative = /^\(.+\)$/.test(value);
-  const unsigned = accountingNegative ? value.slice(1, -1) : value.replace(/^-/, "");
-  if (!/^(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d+)?$/.test(unsigned)) return value;
-  if (unsigned.replace(/[, .]/g, "").length > 15) return value;
-  const numeric = Number(unsigned.replace(/,/g, "")) * (accountingNegative || value.startsWith("-") ? -1 : 1);
-  return Number.isFinite(numeric) ? numeric : value;
+  if (isIdentifierLikeColumnHeading(columnHeading)) return value;
+  return parseConservativeNumericLiteral(value) ?? value;
 }
 
 function normalizedBox(left: number, top: number, right: number, bottom: number, page: WordPage): PdfSourceBox {

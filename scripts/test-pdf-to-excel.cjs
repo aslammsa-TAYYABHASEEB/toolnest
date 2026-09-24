@@ -31,6 +31,7 @@ const { buildOcrWordPage, recognitionLines } = require('../lib/pdf/ocr-word-layo
 const { extractVectorGridTables } = require('../lib/pdf/vector-table.ts');
 const { extractScannedGridTables } = require('../lib/pdf/scanned-table.ts');
 const { rotateCanvas } = require('../lib/pdf/ocr-render.ts');
+const { isIdentifierLikeColumnHeading, parseConservativeNumericLiteral } = require('../lib/pdf/cell-semantics.ts');
 const output = path.resolve('work/pdf-excel-qa');
 fs.mkdirSync(output, { recursive:true });
 
@@ -148,6 +149,72 @@ async function irregularSpanningFixture() {
   page.drawText('Footer prose is not a table row.',{x:50,y:320,size:11,font});
   return pdf.save();
 }
+async function latentAmountColumnFixture() {
+  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica);
+  const pageAmounts=[
+    ['0','30000','395496','59324','89324','-2500','(2,500)'],
+    ['0','6000','507582','55834','61834','-2500','(2,500)'],
+  ];
+  const descriptions=[
+    'Exempted amount 600000/-',
+    'Taxable after threshold 12,00,001',
+    '1595496-12,00,000 =',
+    'Tax calculation (395496x 15%)',
+    'Annual adjustment 22,00,000',
+    'Supported negative adjustment',
+    'Accounting negative adjustment',
+  ];
+  for(let pageNumber=0;pageNumber<2;pageNumber++){
+    const page=pdf.addPage([595,842]),x=[60,180,320,380,400,430,540],top=700,rowHeight=30,rows=13;
+    for(let row=0;row<=rows;row++) page.drawLine({start:{x:x[0],y:top-row*rowHeight},end:{x:x.at(-1),y:top-row*rowHeight},thickness:1});
+    for(const edge of [x[0],x.at(-1)]) page.drawLine({start:{x:edge,y:top},end:{x:edge,y:top-rows*rowHeight},thickness:1});
+    for(const edge of x.slice(1,-1)) page.drawLine({start:{x:edge,y:top},end:{x:edge,y:top-3*rowHeight},thickness:1});
+    const text=(value,column,row)=>page.drawText(value,{x:x[column]+5,y:top-row*rowHeight-20,size:9,font});
+    const rightText=(value,row,right=532)=>page.drawText(value,{x:right-font.widthOfTextAtSize(value,9),y:top-row*rowHeight-20,size:9,font});
+    ['Basic Pay','Period','Quantity','x','Months','Total'].forEach((value,column)=>text(value,column,0));
+    const quantity=pageNumber?'284597':'265916',total=pageNumber?'1707582':'1595496';
+    [quantity,'JAN-JUN',quantity,'x','6',total].forEach((value,column)=>text(value,column,1));
+    text('TOTAL',0,2);rightText(total,2);
+    descriptions.forEach((value,index)=>{text(value,0,index+3);if(index===0)text('Rs.',4,index+3);rightText(pageAmounts[pageNumber][index],index+3);});
+    text('General explanatory row without amount',0,10);
+    text('Ambiguous competing amounts',0,11);page.drawText('100',{x:450,y:top-11*rowHeight-20,size:9,font});rightText('200',11);
+    text('Isolated amount-like row',0,12);rightText('75',12);
+  }
+  return pdf.save();
+}
+async function unboundedRightCellFixture() {
+  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica),page=pdf.addPage([550,700]);
+  const x=[40,150,270,350,410,470,500],top=580,rowHeight=34,rows=6;
+  for(let row=0;row<=3;row++) page.drawLine({start:{x:x[0],y:top-row*rowHeight},end:{x:x.at(-1),y:top-row*rowHeight},thickness:1});
+  for(let row=4;row<=rows;row++){
+    const y=top-row*rowHeight;
+    page.drawLine({start:{x:x[0],y},end:{x:x[5],y},thickness:1});
+    page.drawLine({start:{x:x[6]-5,y},end:{x:x[6],y},thickness:1});
+  }
+  for(const edge of [x[0],x.at(-1)]) page.drawLine({start:{x:edge,y:top},end:{x:edge,y:top-rows*rowHeight},thickness:1});
+  for(const edge of x.slice(1,-1)) page.drawLine({start:{x:edge,y:top},end:{x:edge,y:top-3*rowHeight},thickness:1});
+  const text=(value,column,row)=>page.drawText(value,{x:x[column]+4,y:top-row*rowHeight-22,size:8,font});
+  const right=(value,row)=>page.drawText(value,{x:496-font.widthOfTextAtSize(value,8),y:top-row*rowHeight-22,size:8,font});
+  ['Label','Period','Rate','x','Months','Total'].forEach((value,column)=>text(value,column,0));
+  ['Base','JAN-JUN','100','x','6','600'].forEach((value,column)=>text(value,column,1));
+  text('TOTAL',0,2);right('600',2);
+  ['Unbounded first','Unbounded second','Unbounded third'].forEach((value,index)=>{text(value,0,index+3);right(String((index+1)*111),index+3);});
+  return pdf.save();
+}
+async function identifierRightColumnFixture() {
+  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica),page=pdf.addPage([595,700]);
+  const x=[50,170,290,360,400,440,550],top=580,rowHeight=34,rows=6;
+  for(let row=0;row<=rows;row++) page.drawLine({start:{x:x[0],y:top-row*rowHeight},end:{x:x.at(-1),y:top-row*rowHeight},thickness:1});
+  for(const edge of [x[0],x.at(-1)]) page.drawLine({start:{x:edge,y:top},end:{x:edge,y:top-rows*rowHeight},thickness:1});
+  for(const edge of x.slice(1,-1)) page.drawLine({start:{x:edge,y:top},end:{x:edge,y:top-3*rowHeight},thickness:1});
+  const text=(value,column,row)=>page.drawText(value,{x:x[column]+5,y:top-row*rowHeight-22,size:9,font});
+  const right=(value,row)=>page.drawText(value,{x:544-font.widthOfTextAtSize(value,9),y:top-row*rowHeight-22,size:9,font});
+  ['Name','Period','Rate','x','Count','Bank Account'].forEach((value,column)=>text(value,column,0));
+  ['Base','JAN-JUN','100','x','6','12345'].forEach((value,column)=>text(value,column,1));
+  text('TOTAL',0,2);right('12345',2);
+  ['First identifier','Second identifier','Third identifier'].forEach((value,index)=>{text(value,0,index+3);right(String(12345+index*11111),index+3);});
+  return pdf.save();
+}
 async function scannedFixture() {
   const image=canvas.createCanvas(1400,1000), context=image.getContext('2d');
   context.fillStyle='#fff';context.fillRect(0,0,image.width,image.height);context.font='52px Arial';context.fillStyle='#111';
@@ -198,7 +265,7 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
     }));
     return {tables,pageCount:pages.length,scannedPageCount:0};
   }
-  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture(), numeric:await numericEvidenceFixture(), irregular:await irregularSpanningFixture() };
+  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture(), numeric:await numericEvidenceFixture(), irregular:await irregularSpanningFixture(), latent:await latentAmountColumnFixture(), unbounded:await unboundedRightCellFixture(), identifier:await identifierRightColumnFixture() };
   for(const [name,bytes] of Object.entries(fixtures)) fs.writeFileSync(path.join(output,`${name}.pdf`),bytes);
   const routedMulti=await excel.extractPdfTables(file(fixtures.multi,'multi.pdf'));
   assert.equal(routedMulti.tables.length,1,'real routing must retain one continued table');
@@ -223,6 +290,57 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   assert.ok(Math.abs(irregularTable.evidence[4][3].bbox.left-340/500)<.01);
   assert.ok(!irregularTable.rows.flat().join(' ').includes('Neighboring prose'));
   assertEvidenceInvariant(irregular);
+  const latent=await excel.extractPdfTables(file(fixtures.latent,'latent-amount-column.pdf'));
+  assert.equal(latent.scannedPageCount,0,'TAX-like native grids must not be routed to OCR');
+  assert.equal(latent.tables.length,2,'The two TAX-like pages remain separate vector tables');
+  const expectedAmounts=[[0,30000,395496,59324,89324,-2500,-2500],[0,6000,507582,55834,61834,-2500,-2500]];
+  for(const [pageIndex,table] of latent.tables.entries()){
+    assert.equal(table.method,'vector-grid');
+    assert.deepEqual([table.pageStart,table.pageEnd],[pageIndex+1,pageIndex+1]);
+    assert.equal(table.rows.length,13);assert.equal(table.rows[0].length,6);
+    assert.deepEqual(table.rows[1],[pageIndex?284597:265916,'JAN-JUN',pageIndex?284597:265916,'x',6,pageIndex?1707582:1595496]);
+    assert.equal(table.rows[2][0],'TOTAL');assert.equal(table.rows[2][5],pageIndex?1707582:1595496);
+    assert.deepEqual(table.rows.slice(3,10).map(row=>row[5]),expectedAmounts[pageIndex]);
+    for(let row=3;row<10;row++){
+      assert.ok(table.merges.some(merge=>merge.startRow===row&&merge.endRow===row&&merge.startColumn===0&&merge.endColumn===4),'Qualifying description must merge only A:E');
+      const proof=table.evidence[row][5];assert.ok(proof,'Rescued amount keeps evidence');
+      assert.equal(proof.sourceText,String(pageIndex===0?['0','30000','395496','59324','89324','-2500','(2,500)'][row-3]:['0','6000','507582','55834','61834','-2500','(2,500)'][row-3]));
+      assert.ok(Math.abs(proof.bbox.left-430/595)<.005);assert.ok(Math.abs(proof.bbox.width-110/595)<.005);
+      assert.ok(Math.abs(proof.bbox.top-(232+(row-3)*30)/842)<.005);assert.ok(Math.abs(proof.bbox.height-30/842)<.005);
+    }
+    assert.match(String(table.rows[3][0]),/600000\/-/);assert.equal(table.rows[3][4],'');
+    assert.match(String(table.rows[5][0]),/1595496-12,00,000 =/);
+    assert.match(String(table.rows[6][0]),/395496x 15%/);
+    assert.ok(table.merges.some(merge=>merge.startRow===10&&merge.endRow===10&&merge.startColumn===0&&merge.endColumn===5),'Ordinary explanation stays fully merged');
+    assert.ok(table.merges.some(merge=>merge.startRow===11&&merge.endRow===11&&merge.startColumn===0&&merge.endColumn===5),'Ambiguous numeric row stays fully merged');
+    assert.match(String(table.rows[11][0]),/100/);assert.match(String(table.rows[11][0]),/200/);
+    assert.ok(table.merges.some(merge=>merge.startRow===12&&merge.endRow===12&&merge.startColumn===0&&merge.endColumn===5),'An isolated amount-like row does not satisfy the three-row gate');
+    assert.match(String(table.rows[12][0]),/75/);
+    assert.ok(table.merges.every(merge=>!(merge.startRow<=1&&merge.endRow>=1)),'Upper multiplication row retains the six real columns');
+  }
+  assertEvidenceInvariant(latent);
+  const unbounded=await excel.extractPdfTables(file(fixtures.unbounded,'unbounded-right-cell.pdf'));
+  assert.equal(unbounded.tables.length,1);assert.equal(unbounded.tables[0].method,'vector-grid');
+  const unboundedTable=unbounded.tables[0];
+  for(let row=3;row<6;row++){
+    assert.equal(unboundedTable.rows[row][5],'','A row without an F horizontal boundary must not gain a standalone F cell');
+    assert.equal(unboundedTable.evidence[row][5],null,'An unbounded F interval must not gain standalone evidence');
+    assert.ok(!unboundedTable.merges.some(merge=>merge.startRow===row&&merge.endRow===row&&merge.startColumn===0&&merge.endColumn===4));
+  }
+  assert.ok(unboundedTable.merges.some(merge=>merge.startRow===3&&merge.endRow===5&&merge.startColumn===0&&merge.endColumn===5),'Missing F separators preserve the conservative combined topology');
+  const identifier=await excel.extractPdfTables(file(fixtures.identifier,'identifier-right-column.pdf'));
+  assert.equal(identifier.tables.length,1);assert.equal(identifier.tables[0].method,'vector-grid');
+  const identifierTable=identifier.tables[0];
+  for(let row=3;row<6;row++){
+    assert.equal(identifierTable.rows[row][5],'','Identifier-headed digits must not activate amount rescue');
+    assert.equal(identifierTable.evidence[row][5],null);
+    assert.ok(identifierTable.merges.some(merge=>merge.startRow===row&&merge.endRow===row&&merge.startColumn===0&&merge.endColumn===5));
+    assert.match(String(identifierTable.rows[row][0]),/\d{5}/);
+  }
+  assert.ok(isIdentifierLikeColumnHeading('Bank Account'));assert.ok(isIdentifierLikeColumnHeading('Employee Code'));
+  assert.ok(isIdentifierLikeColumnHeading('Sr. No.'));assert.ok(!isIdentifierLikeColumnHeading('Total'));
+  for(const [source,expected] of [['0',0],['-2500',-2500],['(2,500)',-2500],['1,234.50',1234.5],['1234.5',1234.5]]) assert.equal(parseConservativeNumericLiteral(source),expected);
+  for(const source of ['0012','600000/-','12,00,001','1595496-12,00,000 =','(395496x 15%)','12-05-2023','BS-03']) assert.equal(parseConservativeNumericLiteral(source),null);
   const native=await extractNative(fixtures.native);
   assert.equal(native.tables.length,1); assert.equal(native.tables[0].rows.length,4); assert.equal(native.tables[0].rows[0].length,3);
   assert.equal(native.tables[0].rows[2][1],''); assert.equal(native.tables[0].rows[1][2],25.5); assert.equal(native.tables[0].rows[1][0],1001);

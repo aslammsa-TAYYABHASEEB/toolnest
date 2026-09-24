@@ -1,4 +1,5 @@
 import type { PDFPageProxy } from "pdfjs-dist";
+import { isIdentifierLikeColumnHeading, parseConservativeNumericLiteral } from "./cell-semantics";
 import { extractWordRules } from "./word-extraction";
 import type { WordRule } from "./word-layout";
 
@@ -79,7 +80,8 @@ function pageTextItems(text: TextContent, viewport: ReturnType<PDFPageProxy["get
     const endX = startX + dx / magnitude * advance;
     const endY = startY + dy / magnitude * advance;
     return [{ text: item.str.trim(), x: (startX + endX) / 2, y: (startY + endY) / 2,
-      dx, dy, startX, startY, size: Math.hypot(a * w + c * z, b * w + d * z) || Math.hypot(dx, dy) }];
+      dx, dy, startX, startY, left: Math.min(startX, endX), right: Math.max(startX, endX),
+      size: Math.hypot(a * w + c * z, b * w + d * z) || Math.hypot(dx, dy) }];
   });
 }
 
@@ -145,6 +147,69 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
   const x = xEdges.filter((edge, index) => !index || edge - xEdges[index - 1] > 2);
   if (x.length < 4 || x.length > 65) return [];
   const rows = y.length - 1, columns = x.length - 1;
+  const nativeItems = pageTextItems(text, viewport);
+  const latentRightBoundary = x[columns - 1];
+  const rightBoundaryRule = strong.find(band => Math.abs(band.coordinate - latentRightBoundary) < 2);
+  const rightBoundarySupport = rightBoundaryRule ? y.slice(0, -1).filter((rowTop, row) =>
+    covered(rightBoundaryRule, rowTop + 1, y[row + 1] - 1)).length : 0;
+  const verticalAt = (coordinate: number) => vertical.find(band => Math.abs(band.coordinate - coordinate) < 2);
+  const horizontalAt = (coordinate: number) => horizontal.find(band => Math.abs(band.coordinate - coordinate) < 2);
+  const substantiallyCovered = (band: Band | undefined, start: number, end: number) =>
+    !!band && band.segments.reduce((sum, segment) => sum + overlap(segment, start, end), 0) >= (end - start) * .85;
+  const rowItems = (row: number) => nativeItems.filter(item =>
+    locate(y, item.y) === row && Math.abs(item.dy) <= Math.abs(item.dx) * 2);
+  const rightColumnItems = (row: number) => rowItems(row).filter(item =>
+    item.left >= latentRightBoundary - 1 && item.right <= right + 1);
+  const firstDataRow = Array.from({ length: rows - 1 }, (_, index) => index + 1).find(row =>
+    rowItems(row).filter(item => parseConservativeNumericLiteral(item.text) !== null).length >= 2);
+  const upperHeaderRows = Math.min(firstDataRow ?? rows, 4);
+  const rightmostHeadingItems = Array.from({ length: upperHeaderRows }, (_, row) =>
+    covered(rightBoundaryRule, y[row] + 1, y[row + 1] - 1)
+      ? rightColumnItems(row).filter(item => parseConservativeNumericLiteral(item.text) === null)
+      : []).flat();
+  const rightmostHeading = rightmostHeadingItems.length
+    ? rightmostHeadingItems.sort((a, b) => a.y - b.y || a.x - b.x).map(item => item.text).join(" ")
+    : null;
+  const allowsAmountRescue = rightmostHeading === null || !isIdentifierLikeColumnHeading(rightmostHeading);
+  const rescueCandidates: Array<{ row: number; right: number }> = [];
+
+  // Some ruled statements retain the column geometry established by their
+  // header but omit every internal divider in a lower financial section. A
+  // repeated, aligned amount run can preserve only that existing final column;
+  // uncertainty deliberately leaves the original full-width merge untouched.
+  if (rightBoundaryRule && rightBoundarySupport >= 2 && allowsAmountRescue) for (let row = 0; row < rows; row += 1) {
+    const rowTop = y[row], rowBottom = y[row + 1];
+    const structurallyRuled = substantiallyCovered(horizontalAt(rowTop), left + 1, right - 1) &&
+      substantiallyCovered(horizontalAt(rowBottom), left + 1, right - 1) &&
+      substantiallyCovered(verticalAt(left), rowTop + 1, rowBottom - 1) &&
+      substantiallyCovered(verticalAt(right), rowTop + 1, rowBottom - 1);
+    const rightCellHorizontallyBounded = covered(horizontalAt(rowTop), latentRightBoundary + 1, right - 1) &&
+      covered(horizontalAt(rowBottom), latentRightBoundary + 1, right - 1);
+    const allInternalDividersAbsent = x.slice(1, -1).every(edge =>
+      !covered(verticalAt(edge), rowTop + 1, rowBottom - 1));
+    if (!structurallyRuled || !rightCellHorizontallyBounded || !allInternalDividersAbsent) continue;
+    const items = rowItems(row);
+    if (items.some(item => item.left < latentRightBoundary + 2.5 && item.right > latentRightBoundary - 2.5)) continue;
+    const rightItems = rightColumnItems(row);
+    if (rightItems.length !== 1 || parseConservativeNumericLiteral(rightItems[0].text) === null) continue;
+    rescueCandidates.push({ row, right: rightItems[0].right });
+  }
+  const rescuedRows = new Set<number>();
+  let run: Array<{ row: number; right: number }> = [];
+  const finishRun = () => {
+    if (run.length >= 3 && Math.max(...run.map(candidate => candidate.right)) -
+      Math.min(...run.map(candidate => candidate.right)) <= 1.5) {
+      run.forEach(candidate => rescuedRows.add(candidate.row));
+    }
+    run = [];
+  };
+  for (const candidate of rescueCandidates) {
+    const next = [...run, candidate];
+    const aligned = Math.max(...next.map(entry => entry.right)) - Math.min(...next.map(entry => entry.right)) <= 1.5;
+    if (run.length && (candidate.row !== run.at(-1)!.row + 1 || !aligned)) finishRun();
+    run.push(candidate);
+  }
+  finishRun();
   const parent = Array.from({ length: rows * columns }, (_, index) => index);
   const root = (index: number): number => {
     while (parent[index] !== index) { parent[index] = parent[parent[index]]; index = parent[index]; }
@@ -153,7 +218,9 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
   const union = (a: number, b: number) => { parent[root(b)] = root(a); };
   for (let r = 0; r < rows; r++) for (let col = 0; col < columns; col++) {
     const index = r * columns + col;
-    if (col + 1 < columns && !covered(vertical.find(band => Math.abs(band.coordinate - x[col + 1]) < 2), y[r] + 1, y[r + 1] - 1)) union(index, index + 1);
+    const preserveLatentRightColumn = rescuedRows.has(r) && col === columns - 2;
+    if (col + 1 < columns && !preserveLatentRightColumn &&
+      !covered(vertical.find(band => Math.abs(band.coordinate - x[col + 1]) < 2), y[r] + 1, y[r + 1] - 1)) union(index, index + 1);
     if (r + 1 < rows && !covered(horizontal.find(band => Math.abs(band.coordinate - y[r + 1]) < 2), x[col] + 1, x[col + 1] - 1)) union(index, index + columns);
   }
   const components = new Map<number, number[]>();
@@ -174,7 +241,6 @@ export async function extractVectorGridTables(page: PDFPageProxy, text: TextCont
     }
   }
   const buckets: { text: string; x: number; y: number; dx: number; dy: number; size: number }[][] = Array.from({ length: rows * columns }, () => []);
-  const nativeItems = pageTextItems(text, viewport);
   for (const item of nativeItems) {
     const r = locate(y, item.y), col = locate(x, item.x);
     if (r < 0 || col < 0) continue;
