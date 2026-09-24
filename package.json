@@ -12,6 +12,7 @@
     "test:image-ocr": "node scripts/test-image-ocr.cjs",
     "test:pdf-to-excel": "node scripts/test-pdf-to-excel.cjs",
     "test:pdf-to-excel-source-review": "node scripts/test-pdf-to-excel-source-review.cjs",
+    "test:pdf-to-excel-automatic-checks": "node scripts/test-pdf-to-excel-automatic-checks.cjs",
     "test:pdf-table-verification": "node scripts/test-pdf-table-verification.cjs",
     "test:pdf-renderer-security": "node scripts/test-pdf-renderer-security.cjs",
     "test:csp": "node scripts/test-csp-config.cjs",

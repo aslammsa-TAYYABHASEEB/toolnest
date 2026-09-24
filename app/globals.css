@@ -1058,6 +1058,25 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .pdf-excel-tabs button small { color: var(--color-text-muted); font-weight: 600; }
 .pdf-excel-tabs button.is-active { border-color: var(--color-brand-500); background: var(--color-surface-brand); color: var(--color-brand-700); }
 .pdf-excel-preview, .pdf-excel-empty { padding: var(--space-4); min-width: 0; }
+.pdf-excel-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); min-width: 0; margin-top: var(--space-4); }
+.pdf-excel-checks-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1) var(--space-4); }
+.pdf-excel-checks-title, .pdf-excel-checks-label { margin: 0; }
+.pdf-excel-checks-title { font-size: var(--text-lg); }
+.pdf-excel-checks-label { font-size: var(--text-sm); }
+.pdf-excel-checks-copy, .pdf-excel-checks-note, .pdf-excel-checks-fact, .pdf-excel-checks-facts { margin: 0; overflow-wrap: anywhere; }
+.pdf-excel-checks-head > .pdf-excel-checks-copy, .pdf-excel-checks-note { color: var(--color-text-muted); font-size: var(--text-xs); }
+.pdf-excel-checks-row { display: grid; align-content: start; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.pdf-excel-checks-row.is-pass { border-color: color-mix(in srgb, var(--color-success-500) 28%, var(--color-border)); background: color-mix(in srgb, var(--color-success-500) 5%, var(--color-surface)); }
+.pdf-excel-checks-row.is-review { border-color: color-mix(in srgb, var(--color-warning-500) 40%, var(--color-border)); background: color-mix(in srgb, var(--color-warning-500) 7%, var(--color-surface)); }
+.pdf-excel-checks-row.is-unchecked { background: var(--color-surface-muted); }
+.pdf-excel-checks-row.is-info { border-color: color-mix(in srgb, var(--color-brand-500) 22%, var(--color-border)); background: color-mix(in srgb, var(--color-brand-500) 4%, var(--color-surface)); }
+.pdf-excel-checks-row-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.pdf-excel-checks-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.pdf-excel-checks-item { display: grid; gap: var(--space-1); min-width: 0; padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
+.pdf-excel-checks-fact { font-size: var(--text-xs); font-weight: 750; }
+.pdf-excel-checks-facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); color: var(--color-text-muted); font-size: var(--text-xs); }
+.pdf-excel-checks-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.pdf-excel-checks-actions .ui-button { max-width: 100%; white-space: normal; }
 /* Extracted-table display zoom (Source Review): one scoped variable rescales text and
    cell sizing so values, downloads and provenance stay untouched and focus targets
    remain exact at every level. Viewport height matches the PDF source pane. */
@@ -1097,6 +1116,11 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 
 @media (min-width: 56.25rem) {
   .pdf-excel-review { grid-template-columns: minmax(0, 45fr) minmax(0, 55fr); align-items: start; }
+}
+
+@media (max-width: 47.99rem) {
+  .pdf-excel-checks { grid-template-columns: minmax(0, 1fr); }
+  .pdf-excel-checks-head { grid-column: auto; }
 }
 
 @media (min-width: 48rem) {
