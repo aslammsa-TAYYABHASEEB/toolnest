@@ -5,17 +5,24 @@ import type { GridMerge } from "./vector-table";
 export const SOURCE_REVIEW_MIN_ZOOM = 0.75;
 export const SOURCE_REVIEW_MAX_ZOOM = 2;
 export const SOURCE_REVIEW_ZOOM_STEP = 0.25;
+/** Display-only zoom for the extracted-table pane: never touches values, downloads or evidence. */
+export const TABLE_VIEW_MIN_ZOOM = 0.75;
+export const TABLE_VIEW_DEFAULT_ZOOM = 1;
+export const TABLE_VIEW_MAX_ZOOM = 1.5;
+export const TABLE_VIEW_ZOOM_STEP = 0.25;
 /** Retina rendering is clamped: 3x device pixels are not needed for cell review. */
 export const SOURCE_REVIEW_MAX_PIXEL_RATIO = 2;
 
 export type SourceReviewCell = { row: number; column: number };
-export type SourceReviewNotice = "none" | "no-source-location" | "merged-subordinate";
+export type SourceReviewNotice = "none" | "no-source-location" | "merged-subordinate" | "empty-cell";
 
 export const SOURCE_REVIEW_COPY = {
   heading: "Source Review",
   instruction: "Select a cell to see where it came from in the PDF.",
   location: "Source location",
+  tableLabel: "Extracted table",
   noSource: "No source location is available for this cell.",
+  emptyCell: "This cell is empty, so there is no source text to highlight.",
   mergedSubordinate: "No separate source location is stored for this merged cell.",
   sourceText: "Source text",
   loading: "Loading the source page…",
@@ -26,6 +33,13 @@ export function clampSourceReviewZoom(value: number) {
   if (!Number.isFinite(value)) return 1;
   return Math.min(SOURCE_REVIEW_MAX_ZOOM,
     Math.max(SOURCE_REVIEW_MIN_ZOOM, Math.round(value * 100) / 100));
+}
+
+/** Bounds the extracted-table display zoom to 0.75x-1.5x; display sizing only. */
+export function clampTableViewZoom(value: number) {
+  if (!Number.isFinite(value)) return TABLE_VIEW_DEFAULT_ZOOM;
+  return Math.min(TABLE_VIEW_MAX_ZOOM,
+    Math.max(TABLE_VIEW_MIN_ZOOM, Math.round(value * 100) / 100));
 }
 
 export function clampSourceReviewPixelRatio(value: number) {
@@ -96,11 +110,17 @@ export function describeSourceReviewSelection(
   const evidence = cellEvidence(table, cell.row, cell.column);
   if (evidence) return { cell, evidence, notice: "none", mergedAnchor: null };
   const mergedAnchor = mergeAnchorCell(table, cell.row, cell.column);
-  return { cell, evidence: null, notice: mergedAnchor ? "merged-subordinate" : "no-source-location", mergedAnchor };
+  if (mergedAnchor) return { cell, evidence: null, notice: "merged-subordinate", mergedAnchor };
+  // A genuinely empty cell has no source text at all; keep it distinct from a non-empty
+  // cell that simply has no stored provenance. Neither case may invent evidence.
+  const row = table.rows[cell.row];
+  if (row && isEmptySourceCell(row[cell.column])) return { cell, evidence: null, notice: "empty-cell", mergedAnchor: null };
+  return { cell, evidence: null, notice: "no-source-location", mergedAnchor: null };
 }
 
 export function sourceReviewNoticeMessage(selection: SourceReviewSelection) {
   if (selection.notice === "merged-subordinate") return SOURCE_REVIEW_COPY.mergedSubordinate;
+  if (selection.notice === "empty-cell") return SOURCE_REVIEW_COPY.emptyCell;
   if (selection.notice === "no-source-location") return SOURCE_REVIEW_COPY.noSource;
   return null;
 }

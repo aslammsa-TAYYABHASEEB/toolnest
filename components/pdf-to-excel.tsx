@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { PdfToExcelSourceReview } from "@/components/pdf-to-excel-source-review";
 import { PdfUploader } from "@/components/pdf-tool/pdf-uploader";
 import { Button, buttonClassName } from "@/components/ui/button";
@@ -10,11 +10,17 @@ import { makeExcelFilename, makeTableCsvFilename } from "@/lib/pdf/filenames";
 import { readPdfMetadata } from "@/lib/pdf/metadata";
 import {
   SOURCE_REVIEW_COPY,
+  TABLE_VIEW_DEFAULT_ZOOM,
+  TABLE_VIEW_MAX_ZOOM,
+  TABLE_VIEW_MIN_ZOOM,
+  TABLE_VIEW_ZOOM_STEP,
+  clampTableViewZoom,
   describeSourceReviewSelection,
   firstEvidenceCell,
   type SourceReviewCell,
 } from "@/lib/pdf/source-review";
 import {
+  MAX_PDF_TO_EXCEL_SOURCE_PAGES,
   createExcelWorkbook,
   createTableCsv,
   extractPdfTables,
@@ -37,6 +43,8 @@ export function PdfToExcel() {
   const [tables, setTables] = useState<ExtractedPdfTable[]>([]);
   const [selected, setSelected] = useState(0);
   const [activeCell, setActiveCell] = useState<SourceReviewCell | null>(null);
+  // Display-only zoom for the extracted table; never affects values, downloads or evidence.
+  const [tableZoom, setTableZoom] = useState(TABLE_VIEW_DEFAULT_ZOOM);
   const [progress, setProgress] = useState<{ current: number; total: number; phase: PdfToExcelProgressPhase; part?: number } | null>(null);
   const [xlsxUrl, setXlsxUrl] = useState<string | null>(null);
   const [csvUrl, setCsvUrl] = useState<string | null>(null);
@@ -114,7 +122,7 @@ export function PdfToExcel() {
     <div className="privacy-banner"><span aria-hidden="true">✓</span><strong>Your PDF is processed on your device and is not uploaded.</strong></div>
     <PdfUploader inputRef={inputRef} busy={busy} compact={Boolean(source)} multiple={false} inputId="pdf-to-excel-file"
       heading="Drop one PDF with tables here" compactHeading="Replace PDF" buttonLabel={source ? "Choose another" : "Choose PDF"}
-      helperText={`One PDF · ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} maximum`} onSelect={(files) => void selectPdf(files)} />
+      helperText={`One PDF · ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} maximum · up to ${MAX_PDF_TO_EXCEL_SOURCE_PAGES} pages`} onSelect={(files) => void selectPdf(files)} />
 
     {source && <Card className="pdf-split-panel pdf-to-excel-panel">
       <div className="pdf-source-summary"><span className="pdf-file-icon is-visible" aria-hidden="true">PDF</span><span className="pdf-file-details"><strong title={source.file.name}>{source.file.name}</strong><small>{formatPdfBytes(source.file.size)} · {source.pageCount} page{source.pageCount === 1 ? "" : "s"}</small></span><Button variant="ghost" size="sm" onClick={() => inputRef.current?.click()} disabled={busy}>Replace PDF</Button></div>
@@ -126,7 +134,7 @@ export function PdfToExcel() {
       {tables.length === 0 ? <Card className="pdf-excel-empty"><strong>No clear tables found</strong><p>The PDF was read successfully, but no regular table structure could be identified confidently. Try a PDF with clearer rows and columns.</p></Card> : <>
         <div className="pdf-excel-summary"><div><strong>{tables.length} table{tables.length === 1 ? "" : "s"} found</strong><p>{result.pageCount} page{result.pageCount === 1 ? "" : "s"}{result.scannedPageCount ? ` · OCR used on ${result.scannedPageCount}` : " · Selectable text"}</p></div>{xlsxUrl && <a className={buttonClassName()} href={xlsxUrl} download={makeExcelFilename(source?.file.name ?? "document.pdf")}>Download Excel (.xlsx)</a>}</div>
         <div className="pdf-excel-tabs" role="tablist" aria-label="Extracted tables">{tables.map((item, index) => <button type="button" role="tab" aria-selected={selected === index} className={selected === index ? "is-active" : ""} key={item.id} onClick={() => setSelected(index)}>{item.name}<small>p. {item.pageStart}{item.pageEnd > item.pageStart ? `–${item.pageEnd}` : ""}</small></button>)}</div>
-        {table && <Card className="pdf-excel-preview"><div className="pdf-excel-preview-head"><div><strong>{table.name}</strong><span>{table.rows.length} rows · {Math.max(0, ...table.rows.map((row) => row.length))} columns · {table.source === "ocr" ? "OCR" : "PDF text"}</span></div>{csvUrl && <a className={buttonClassName({ variant: "secondary" })} href={csvUrl} download={makeTableCsvFilename(source?.file.name ?? "document.pdf", table.name)}>Download this table (.csv)</a>}</div><p className="pdf-excel-edit-note">Review and edit cells before downloading. Changes are kept only in this browser session.</p><div className="pdf-excel-review-head"><h3 className="pdf-excel-review-title" id="pdf-to-excel-source-review-title">{SOURCE_REVIEW_COPY.heading}</h3><p className="pdf-excel-review-instruction">{SOURCE_REVIEW_COPY.instruction}</p></div><div className="pdf-excel-review"><section className="pdf-excel-review-source" aria-labelledby="pdf-to-excel-source-review-title">{source && <PdfToExcelSourceReview file={source.file} totalPages={result?.pageCount ?? source.pageCount} evidence={selection.evidence} notice={selection.notice} cell={selection.cell} mergedAnchor={selection.mergedAnchor} />}</section><section className="pdf-excel-review-table"><div className="pdf-excel-table-scroll"><table><tbody>{table.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex} className={activeCell?.row === rowIndex && activeCell.column === columnIndex ? "is-source-selected" : undefined}><textarea aria-label={`${table.name}, row ${rowIndex + 1}, column ${columnIndex + 1}`} rows={String(cell).includes("\n") ? 2 : 1} value={String(cell)} onFocus={() => setActiveCell({ row: rowIndex, column: columnIndex })} onClick={() => setActiveCell({ row: rowIndex, column: columnIndex })} onChange={(event) => editCell(rowIndex, columnIndex, event.target.value)} /></td>)}</tr>)}</tbody></table></div></section></div></Card>}
+        {table && <Card className="pdf-excel-preview"><div className="pdf-excel-preview-head"><div><strong>{table.name}</strong><span>{table.rows.length} rows · {Math.max(0, ...table.rows.map((row) => row.length))} columns · {table.source === "ocr" ? "OCR" : "PDF text"}</span></div>{csvUrl && <a className={buttonClassName({ variant: "secondary" })} href={csvUrl} download={makeTableCsvFilename(source?.file.name ?? "document.pdf", table.name)}>Download this table (.csv)</a>}</div><p className="pdf-excel-edit-note">Review and edit cells before downloading. Changes are kept only in this browser session.</p><div className="pdf-excel-review-head"><h3 className="pdf-excel-review-title" id="pdf-to-excel-source-review-title">{SOURCE_REVIEW_COPY.heading}</h3><p className="pdf-excel-review-instruction">{SOURCE_REVIEW_COPY.instruction}</p></div><div className="pdf-excel-review"><section className="pdf-excel-review-source" aria-labelledby="pdf-to-excel-source-review-title">{source && <PdfToExcelSourceReview file={source.file} totalPages={result?.pageCount ?? source.pageCount} evidence={selection.evidence} notice={selection.notice} cell={selection.cell} mergedAnchor={selection.mergedAnchor} />}</section><section className="pdf-excel-review-table"><div className="pdf-excel-source-toolbar pdf-excel-table-toolbar"><span className="pdf-excel-source-toolbar-label">{SOURCE_REVIEW_COPY.tableLabel}</span><div className="pdf-excel-source-zoom"><Button variant="ghost" size="sm" aria-label="Zoom out table" disabled={tableZoom <= TABLE_VIEW_MIN_ZOOM} onClick={() => setTableZoom(clampTableViewZoom(tableZoom - TABLE_VIEW_ZOOM_STEP))}>{"−"}</Button><span className="pdf-excel-source-zoom-value">{`${Math.round(tableZoom * 100)}%`}</span><Button variant="ghost" size="sm" aria-label="Zoom in table" disabled={tableZoom >= TABLE_VIEW_MAX_ZOOM} onClick={() => setTableZoom(clampTableViewZoom(tableZoom + TABLE_VIEW_ZOOM_STEP))}>+</Button></div></div><div className="pdf-excel-table-scroll" style={{ "--table-zoom": `${tableZoom}` } as CSSProperties}><table><tbody>{table.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex} className={activeCell?.row === rowIndex && activeCell.column === columnIndex ? "is-source-selected" : undefined}><textarea aria-label={`${table.name}, row ${rowIndex + 1}, column ${columnIndex + 1}`} rows={String(cell).includes("\n") ? 2 : 1} value={String(cell)} onFocus={() => setActiveCell({ row: rowIndex, column: columnIndex })} onClick={() => setActiveCell({ row: rowIndex, column: columnIndex })} onChange={(event) => editCell(rowIndex, columnIndex, event.target.value)} /></td>)}</tr>)}</tbody></table></div></section></div></Card>}
       </>}
     </div>}
 

@@ -8,6 +8,15 @@ globalThis.DOMMatrix = canvas.DOMMatrix; globalThis.ImageData = canvas.ImageData
 Promise.try ??= (callback, ...args) => Promise.resolve().then(() => callback(...args));
 const review = require('../lib/pdf/source-review.ts');
 const { extractVectorGridTables } = require('../lib/pdf/vector-table.ts');
+// Map the app's "@/..." alias for the lib modules whose own imports rely on it
+// (same resolver patch the PDF-to-Excel pipeline test already uses).
+const Module = require('node:module');
+const originalResolve = Module._resolveFilename;
+Module._resolveFilename = function (id, ...args) {
+  return originalResolve.call(this, id.startsWith('@/') ? path.resolve(id.slice(2)) : id, ...args);
+};
+const { formatPdfBytes } = require('../lib/pdf/validation.ts');
+const { MAX_PDF_TOTAL_SIZE } = require('../lib/pdf/types.ts');
 
 const component = fs.readFileSync(path.resolve('components/pdf-to-excel.tsx'), 'utf8');
 const viewer = fs.readFileSync(path.resolve('components/pdf-to-excel-source-review.tsx'), 'utf8');
@@ -50,6 +59,17 @@ assert.equal(review.clampSourceReviewPixelRatio(1.5), 1.5);
 assert.equal(review.clampSourceReviewPixelRatio(0), 1);
 console.log('PASS: zoom stays inside 0.75x-2x and device pixel ratio is clamped to 2.');
 
+// 2b. Table view zoom: bounded, display-only, defaulting to 100%.
+assert.equal(review.TABLE_VIEW_MIN_ZOOM, 0.75);
+assert.equal(review.TABLE_VIEW_DEFAULT_ZOOM, 1);
+assert.equal(review.TABLE_VIEW_MAX_ZOOM, 1.5);
+assert.equal(review.TABLE_VIEW_ZOOM_STEP, 0.25);
+assert.equal(review.clampTableViewZoom(0.5), 0.75);
+assert.equal(review.clampTableViewZoom(3), 1.5);
+assert.equal(review.clampTableViewZoom(1.25), 1.25);
+assert.equal(review.clampTableViewZoom(Number.NaN), 1);
+console.log('PASS: table display zoom stays inside 0.75x-1.5x in 25% steps and defaults to 100%.');
+
 // 3. Initial selection: first non-empty cell that actually carries evidence.
 const first = review.firstEvidenceCell(table());
 assert.deepEqual(first, { row: 0, column: 0 });
@@ -64,12 +84,19 @@ assert.equal(selected.notice, 'none');
 assert.equal(selected.evidence.sourceText, 'Amount');
 assert.equal(review.sourceReviewNoticeMessage(selected), null);
 const emptyCell = review.describeSourceReviewSelection(table(), { row: 2, column: 1 });
-assert.equal(emptyCell.notice, 'no-source-location'); assert.equal(emptyCell.evidence, null);
-assert.equal(review.sourceReviewNoticeMessage(emptyCell), 'No source location is available for this cell.');
+assert.equal(emptyCell.notice, 'empty-cell'); assert.equal(emptyCell.evidence, null);
+assert.equal(emptyCell.mergedAnchor, null, 'an empty cell must never borrow a merged anchor');
+assert.equal(review.sourceReviewNoticeMessage(emptyCell), 'This cell is empty, so there is no source text to highlight.');
+const whitespace = review.describeSourceReviewSelection(
+  table({ rows: [['Item', 'Amount'], ['1001', 22960], ['   ', '']] }), { row: 2, column: 0 });
+assert.equal(whitespace.notice, 'empty-cell', 'whitespace-only cells are empty, not missing provenance');
+assert.equal(whitespace.evidence, null, 'an empty cell must never invent bbox, evidence or source text');
 const missing = review.describeSourceReviewSelection(table(), { row: 2, column: 0 });
 assert.equal(missing.notice, 'no-source-location', 'a non-empty cell without provenance must not get a fabricated box');
+assert.equal(review.sourceReviewNoticeMessage(missing), 'No source location is available for this cell.',
+  'a non-empty cell without provenance keeps the generic message');
 const merged = review.describeSourceReviewSelection(mergedTable, { row: 0, column: 1 });
-assert.equal(merged.notice, 'merged-subordinate'); assert.equal(merged.evidence, null);
+assert.equal(merged.notice, 'merged-subordinate', 'an empty merged subordinate keeps its own merged notice');
 assert.deepEqual(merged.mergedAnchor, { row: 0, column: 0 });
 assert.equal(review.sourceReviewNoticeMessage(merged), 'No separate source location is stored for this merged cell.');
 assert.deepEqual(review.mergeAnchorCell(mergedTable, 0, 0), null, 'the merged anchor itself is not a subordinate');
@@ -104,7 +131,8 @@ console.log('PASS: selected-cell facts use the extracted page, source type and a
 
 // 7. Component contract: the editable table, downloads and page-range tabs are preserved.
 for (const phrase of ['Source Review', 'Select a cell to see where it came from in the PDF.',
-  'No source location is available for this cell.', 'No separate source location is stored for this merged cell.',
+  'No source location is available for this cell.', 'This cell is empty, so there is no source text to highlight.',
+  'No separate source location is stored for this merged cell.',
   'Source location', 'Source text', 'OCR confidence', 'Loading the source page', 'could not be rendered'])
   assert.ok(source.includes(phrase), `missing Source Review copy: ${phrase}`);
 assert.ok(component.includes('SOURCE_REVIEW_COPY.heading') && component.includes('SOURCE_REVIEW_COPY.instruction'));
@@ -158,6 +186,79 @@ assert.ok(!/--color-success-500|--color-danger-500/.test(reviewStyles), 'Source 
 const forbidden = /Verified by ToolNest|accuracy score|confidence score|OCR accuracy|100% verified|is-correct|is-incorrect|is-verified|automated validation/i;
 assert.ok(!forbidden.test(component + viewer + reviewStyles + source), 'no fake review signals are allowed yet');
 console.log('PASS: Source Review styling stays scoped, stacks on mobile and adds no correctness signals.');
+
+// 10. Balanced panes: an independent, display-only table zoom beside the PDF zoom.
+assert.ok(component.includes('useState(TABLE_VIEW_DEFAULT_ZOOM)'), 'table zoom must default to 100%');
+assert.ok(component.includes('tableZoom <= TABLE_VIEW_MIN_ZOOM') && component.includes('tableZoom >= TABLE_VIEW_MAX_ZOOM'),
+  'table zoom buttons must disable at the 75%/150% bounds');
+assert.ok(component.includes('setTableZoom(clampTableViewZoom(tableZoom - TABLE_VIEW_ZOOM_STEP))') &&
+  component.includes('setTableZoom(clampTableViewZoom(tableZoom + TABLE_VIEW_ZOOM_STEP))'),
+  'table zoom steps must stay clamped to the bounded range');
+assert.ok(component.includes('aria-label="Zoom out table"') && component.includes('aria-label="Zoom in table"'),
+  'table zoom controls need their own accessible names');
+assert.ok(component.includes('SOURCE_REVIEW_COPY.tableLabel') && source.includes('Extracted table'),
+  'the right pane gets one concise label that does not repeat the Source Review heading');
+assert.ok(component.includes('className="pdf-excel-source-toolbar pdf-excel-table-toolbar"'),
+  'both panes must share one toolbar layout so their viewports start on the same line');
+assert.ok(component.indexOf('pdf-excel-table-toolbar') < component.indexOf('pdf-excel-table-scroll" style='),
+  'the table toolbar must render above the table viewport');
+assert.ok(component.includes('"--table-zoom"'), 'table zoom must be a scoped CSS variable, not browser zoom');
+const tableZoomScope = styles.slice(styles.indexOf('.pdf-excel-table-scroll {'), styles.indexOf('.pdf-excel-review-head'));
+assert.ok(tableZoomScope.includes('--table-zoom: 1'), 'the table viewport must default its own zoom variable');
+assert.ok(/calc\(1em \* var\(--table-zoom\)\)/.test(tableZoomScope), 'table text must scale through the scoped variable');
+assert.ok(/calc\(9rem \* var\(--table-zoom\)\)/.test(tableZoomScope) && /calc\(2\.5rem \* var\(--table-zoom\)\)/.test(tableZoomScope),
+  'cell dimensions must scale through the scoped variable');
+assert.ok(!/transform/.test(tableZoomScope), 'table zoom must not rely on CSS transforms');
+assert.ok(!component.includes('transform'), 'table zoom must not rely on CSS transforms in the component');
+const zoomFreeEdit = component.slice(component.indexOf('function editCell'), component.indexOf('const progressText'));
+assert.ok(!zoomFreeEdit.includes('tableZoom'), 'table zoom must never rewrite cell values');
+assert.ok(!/create(ExcelWorkbook|TableCsv)\([^)]*tableZoom/.test(component), 'table zoom must never change CSV/XLSX output');
+const viewportHeight = (selector) => {
+  const rule = styles.slice(styles.indexOf(selector), styles.indexOf(selector) + 260);
+  const match = /max-height: ([\d.]+rem)/.exec(rule);
+  assert.ok(match, `missing viewport height for ${selector}`);
+  return match[1];
+};
+assert.equal(viewportHeight('.pdf-excel-table-scroll {'), viewportHeight('.pdf-excel-source-viewport {'),
+  'both pane viewports must share one height so they stay visually aligned');
+console.log('PASS: the extracted table gets an independent display-only zoom toolbar aligned with the PDF pane.');
+// 11. Empty-cell UX: keep the rendered page, remove the highlight, never invent evidence.
+assert.ok(viewer.includes('sourceReviewNoticeMessage'), 'the viewer must reuse the shared notice copy');
+assert.ok(viewer.includes('notice === "empty-cell"'), 'the viewer must treat empty cells as their own state');
+assert.ok(/const showPreview = Boolean\(evidence\) \|\| notice === "empty-cell"/.test(viewer),
+  'an empty cell must keep the rendered page preview visible');
+assert.ok(viewer.includes('evidence && <span className="pdf-excel-source-highlight"'),
+  'the highlight must exist only for evidence-backed cells');
+assert.ok(viewer.includes('evidence && <div className="pdf-excel-source-details"'),
+  'page, source-type and source-text details must stay evidence-only');
+const emptyRetention = viewer.slice(viewer.indexOf('if (!evidence) {'), viewer.indexOf('setStatus("idle")'));
+assert.ok(/keepsRenderedPage = notice === "empty-cell" && renderedFileRef\.current === sourceFileKey\(file\)/.test(emptyRetention),
+  'the retained page must belong to the current source file');
+assert.ok(emptyRetention.indexOf('keepsRenderedPage') < emptyRetention.indexOf('cleared.width = 0'),
+  'the retained page is dropped whenever the notice is not about emptiness or the file changed');
+assert.ok(viewer.includes('setRenderedPageLabel(sourceReviewPageLabel(evidence.page, totalPages))'),
+  'the retained page keeps its real page label instead of an invented one');
+const fileReset = viewer.slice(viewer.indexOf('A replaced source file invalidates'), viewer.indexOf('}, [file]);'));
+assert.ok(fileReset.includes('renderedFileRef.current = ""') && fileReset.includes('renderedKeyRef.current = ""'),
+  'a replaced file must invalidate the retained page identity');
+assert.ok(fileReset.includes('cleared.width = 0') && fileReset.includes('setRenderedPageLabel("")'),
+  'a replaced file must clear the retained page canvas and label');
+const emptyPreview = review.describeSourceReviewSelection(table(), { row: 2, column: 1 });
+assert.equal(emptyPreview.notice, 'empty-cell');
+assert.equal(emptyPreview.evidence, null, 'an empty cell can never carry a bbox or source text');
+assert.equal(emptyPreview.mergedAnchor, null);
+console.log('PASS: empty cells keep the rendered page without a highlight and never invent source evidence.');
+
+// 12. Uploader copy derives the real page limit from the engine constant.
+const toExcelSource = fs.readFileSync(path.resolve('lib/pdf/to-excel.ts'), 'utf8');
+const pageLimit = Number(/export const MAX_PDF_TO_EXCEL_SOURCE_PAGES = (\d+);/.exec(toExcelSource)[1]);
+assert.equal(pageLimit, 300, 'the engine limits PDF-to-Excel sources to 300 pages');
+assert.ok(component.includes('up to ${MAX_PDF_TO_EXCEL_SOURCE_PAGES} pages'),
+  'the uploader helper text must derive the page limit from the engine constant');
+assert.ok(!component.includes('up to 300 pages'), 'the page limit must never be hard-coded in the uploader copy');
+assert.equal(`One PDF · ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} maximum · up to ${pageLimit} pages`,
+  'One PDF · 100 MB maximum · up to 300 pages', 'the uploader must advertise the real limits');
+console.log('PASS: the uploader advertises the real 300-page PDF-to-Excel limit from the engine constant.');
 console.log('PASS: PDF to Excel Source Review unit and UI contract checks completed.');
 
 
