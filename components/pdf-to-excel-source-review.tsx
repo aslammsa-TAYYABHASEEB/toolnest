@@ -17,6 +17,8 @@ import {
   sourceReviewNoticeMessage,
   sourceReviewOcrConfidence,
   sourceReviewPageLabel,
+  sourceReviewPreviewIdentity,
+  sourceReviewPreviewMatches,
   sourceReviewRotation,
   sourceReviewSourceLabel,
   type SourceReviewCell,
@@ -28,6 +30,9 @@ type SourceReviewViewerProps = {
   file: File;
   totalPages: number;
   evidence: PdfCellEvidence | null;
+  previewEvidence: PdfCellEvidence | null;
+  /** Display-only: keeps the already rendered page as context for a genuinely empty selection. */
+  retainPageContext: boolean;
   notice: SourceReviewNotice;
   cell: SourceReviewCell | null;
   mergedAnchor: SourceReviewCell | null;
@@ -39,13 +44,23 @@ const isRenderCancelled = (caught: unknown) => caught instanceof Error &&
   (caught.name === "RenderingCancelledException" || caught.name === "AbortException");
 
 /** Identity of the PDF whose page is currently painted into the retained canvas. */
-const sourceFileKey = (target: File) => `${target.name}|${target.size}|${target.lastModified}`;
+const sourceFileKeys = new WeakMap<File, string>();
+let sourceFileSequence = 0;
+const sourceFileKey = (target: File) => {
+  const existing = sourceFileKeys.get(target);
+  if (existing) return existing;
+  const key = `${target.name}|${target.size}|${target.lastModified}|instance:${++sourceFileSequence}`;
+  sourceFileKeys.set(target, key);
+  return key;
+};
 
 /**
  * Source Review viewer: owns the local PDF.js document lifecycle for one source file,
  * renders only the evidence page, and aligns a normalized bbox overlay with that render.
  */
-export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cell, mergedAnchor }: SourceReviewViewerProps) {
+export function PdfToExcelSourceReview({ file, totalPages, evidence, previewEvidence, retainPageContext, notice, cell, mergedAnchor }: SourceReviewViewerProps) {
+  const displayEvidence = evidence ?? previewEvidence;
+  const desiredPreviewIdentity = sourceReviewPreviewIdentity(sourceFileKey(file), displayEvidence);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const documentRef = useRef<{ file: File; proxy: PDFDocumentProxy } | null>(null);
@@ -61,6 +76,9 @@ export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cel
   const [message, setMessage] = useState("");
   const renderedFileRef = useRef("");
   const [renderedPageLabel, setRenderedPageLabel] = useState("");
+  const [renderedPreviewIdentity, setRenderedPreviewIdentity] = useState<string | null>(null);
+  const [statusPreviewIdentity, setStatusPreviewIdentity] = useState<string | null>(null);
+  const previewMatchesRenderedSource = sourceReviewPreviewMatches(desiredPreviewIdentity, renderedPreviewIdentity);
 
   function releaseDocument(proxy: PDFDocumentProxy | null) {
     if (proxy) void proxy.loadingTask.destroy();
@@ -104,6 +122,8 @@ export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cel
   useEffect(() => {
     renderedFileRef.current = "";
     renderedKeyRef.current = "";
+    setRenderedPreviewIdentity(null);
+    setStatusPreviewIdentity(null);
     setRenderedPageLabel("");
     const cleared = canvasRef.current;
     if (cleared) { cleared.width = 0; cleared.height = 0; cleared.style.width = "0px"; cleared.style.height = "0px"; }
@@ -113,35 +133,39 @@ export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cel
     const generation = ++renderGeneration.current;
     const isStale = () => generation !== renderGeneration.current;
 
-    if (!evidence) {
-      // A genuine empty cell keeps the already rendered page as context; the canvas is only
-      // dropped when that page belongs to another file or the notice is not about emptiness.
-      const keepsRenderedPage = notice === "empty-cell" && renderedFileRef.current === sourceFileKey(file);
+    if (!displayEvidence) {
+      // A genuinely empty selection (a blank cell, or a blank merged region) keeps the already
+      // rendered page as context; that page is dropped when it belongs to another file or the
+      // selection is not a genuinely empty context. No other state may retain a stale page.
+      const keepsRenderedPage = retainPageContext && renderedFileRef.current === sourceFileKey(file);
       if (!keepsRenderedPage) {
         renderTaskRef.current?.cancel();
         renderTaskRef.current = null;
         renderedKeyRef.current = "";
         renderedFileRef.current = "";
+        setRenderedPreviewIdentity(null);
         setRenderedPageLabel("");
         const cleared = canvasRef.current;
         if (cleared) { cleared.width = 0; cleared.height = 0; cleared.style.width = "0px"; cleared.style.height = "0px"; }
       }
       setStatus("idle");
+      setStatusPreviewIdentity(null);
       setMessage("");
       return;
     }
 
     setStatus("loading");
+    setStatusPreviewIdentity(desiredPreviewIdentity);
     setMessage("");
     void (async () => {
       try {
         const proxy = await ensureDocument(file, documentGeneration.current);
         if (!proxy || isStale()) return;
-        const page = await proxy.getPage(evidence.page);
+        const page = await proxy.getPage(displayEvidence.page);
         if (isStale()) return;
-        const rotation = sourceReviewRotation(page.rotate, evidence.rotation ?? 0);
+        const rotation = sourceReviewRotation(page.rotate, displayEvidence.rotation ?? 0);
         const pixelRatio = clampSourceReviewPixelRatio(window.devicePixelRatio);
-        const key = `${file.name}|${file.size}|${file.lastModified}|${evidence.page}|${rotation}`;
+        const key = `${file.name}|${file.size}|${file.lastModified}|${displayEvidence.page}|${rotation}`;
         if (zoomRef.current.key !== key) zoomRef.current = { key, user: false };
         if (!zoomRef.current.user) {
           const container = scrollRef.current;
@@ -155,7 +179,11 @@ export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cel
         }
 
         const renderKey = `${key}|${zoom}|${pixelRatio}`;
-        if (renderedKeyRef.current === renderKey) { setStatus("ready"); return; }
+        if (renderedKeyRef.current === renderKey) {
+          setRenderedPreviewIdentity(desiredPreviewIdentity);
+          setStatus("ready");
+          return;
+        }
 
         const cssViewport = page.getViewport({ scale: zoom, rotation });
         const canvas = canvasRef.current;
@@ -190,15 +218,17 @@ export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cel
         if (isStale()) return;
         renderedKeyRef.current = renderKey;
         renderedFileRef.current = sourceFileKey(file);
-        setRenderedPageLabel(sourceReviewPageLabel(evidence.page, totalPages));
+        setRenderedPreviewIdentity(desiredPreviewIdentity);
+        setRenderedPageLabel(sourceReviewPageLabel(displayEvidence.page, totalPages));
         setStatus("ready");
       } catch (caught) {
         if (isStale() || isRenderCancelled(caught)) return;
         setMessage(toPdfProcessingError(caught, SOURCE_REVIEW_COPY.error).message);
+        setStatusPreviewIdentity(desiredPreviewIdentity);
         setStatus("error");
       }
     })();
-  }, [file, evidence, notice, zoom]);
+  }, [file, displayEvidence, desiredPreviewIdentity, retainPageContext, zoom]);
 
   useEffect(() => () => {
     renderGeneration.current += 1;
@@ -212,13 +242,22 @@ export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cel
     releaseDocument(current?.proxy ?? null);
   }, []);
 
-  const noticeMessage = sourceReviewNoticeMessage({ cell, evidence, notice, mergedAnchor })
-    ?? (!evidence ? SOURCE_REVIEW_COPY.noSource : null);
-  const confidence = evidence ? sourceReviewOcrConfidence(evidence) : null;
-  // A genuine empty cell keeps the retained page visible and can never show a highlight.
-  const showPreview = Boolean(evidence) || notice === "empty-cell";
-  const canvasLabel = evidence
-    ? `${SOURCE_REVIEW_COPY.location}: ${sourceReviewPageLabel(evidence.page, totalPages)}`
+  const noticeMessage = sourceReviewNoticeMessage({ cell, evidence, previewEvidence, retainPageContext, notice, mergedAnchor })
+    ?? (!displayEvidence ? SOURCE_REVIEW_COPY.noSource : null);
+  const confidence = displayEvidence ? sourceReviewOcrConfidence(displayEvidence) : null;
+  const detailsCell = notice === "merged-subordinate" && previewEvidence ? mergedAnchor : cell;
+  const statusMatchesDesiredSource = desiredPreviewIdentity !== null &&
+    statusPreviewIdentity === desiredPreviewIdentity;
+  const previewIsPending = Boolean(displayEvidence) && !previewMatchesRenderedSource;
+  const showLoading = Boolean(displayEvidence) &&
+    ((statusMatchesDesiredSource && status === "loading") ||
+      (previewIsPending && !(statusMatchesDesiredSource && status === "error")));
+  const showError = Boolean(displayEvidence) && statusMatchesDesiredSource && status === "error";
+  // An empty selection keeps the retained page visible as context and can never show a highlight
+  // or source details; without a page actually rendered there is nothing to retain.
+  const showPreview = Boolean(displayEvidence) || (retainPageContext && renderedPageLabel !== "");
+  const canvasLabel = displayEvidence
+    ? `${SOURCE_REVIEW_COPY.location}: ${sourceReviewPageLabel(displayEvidence.page, totalPages)}`
     : renderedPageLabel
       ? `${SOURCE_REVIEW_COPY.location}: ${renderedPageLabel}`
       : SOURCE_REVIEW_COPY.location;
@@ -227,10 +266,10 @@ export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cel
     <div className="pdf-excel-source-toolbar">
       <span className="pdf-excel-source-toolbar-label">{SOURCE_REVIEW_COPY.location}</span>
       <div className="pdf-excel-source-zoom">
-        <Button variant="ghost" size="sm" aria-label="Zoom out" disabled={!evidence || zoom <= SOURCE_REVIEW_MIN_ZOOM}
+        <Button variant="ghost" size="sm" aria-label="Zoom out" disabled={!displayEvidence || zoom <= SOURCE_REVIEW_MIN_ZOOM}
           onClick={() => setUserZoom(zoom - SOURCE_REVIEW_ZOOM_STEP)}>{"−"}</Button>
         <span className="pdf-excel-source-zoom-value">{`${Math.round(zoom * 100)}%`}</span>
-        <Button variant="ghost" size="sm" aria-label="Zoom in" disabled={!evidence || zoom >= SOURCE_REVIEW_MAX_ZOOM}
+        <Button variant="ghost" size="sm" aria-label="Zoom in" disabled={!displayEvidence || zoom >= SOURCE_REVIEW_MAX_ZOOM}
           onClick={() => setUserZoom(zoom + SOURCE_REVIEW_ZOOM_STEP)}>+</Button>
       </div>
     </div>
@@ -242,23 +281,27 @@ export function PdfToExcelSourceReview({ file, totalPages, evidence, notice, cel
 
     {showPreview && <>
       <div className="pdf-excel-source-viewport" ref={scrollRef}>
-        <div className="pdf-excel-source-page">
+        <div className="pdf-excel-source-page"
+          style={previewIsPending ? { visibility: "hidden" } : undefined}>
           <canvas ref={canvasRef} className="pdf-excel-source-canvas" role="img" aria-label={canvasLabel} />
-          {evidence && <span className="pdf-excel-source-highlight" aria-hidden="true" style={sourceReviewBoxStyle(evidence.bbox)} />}
+          {displayEvidence && previewMatchesRenderedSource &&
+            <span className="pdf-excel-source-highlight" aria-hidden="true" style={sourceReviewBoxStyle(displayEvidence.bbox)} />}
         </div>
       </div>
-      {status === "loading" && <p className="pdf-excel-source-status" role="status" aria-live="polite">{SOURCE_REVIEW_COPY.loading}</p>}
-      {status === "error" && <p className="pdf-excel-source-status converter-error" role="alert">
+      {showLoading && <p className="pdf-excel-source-status" role="status" aria-live="polite">{SOURCE_REVIEW_COPY.loading}</p>}
+      {showError && <p className="pdf-excel-source-status converter-error" role="alert">
         <strong>{SOURCE_REVIEW_COPY.error}</strong> {message}</p>}
     </>}
 
-    {evidence && <div className="pdf-excel-source-details" aria-live="polite">
-      <p className="pdf-excel-source-details-lead">{sourceReviewPageLabel(evidence.page, totalPages)}</p>
-      <p className="pdf-excel-source-details-lead">{sourceReviewSourceLabel(evidence)}</p>
+    {displayEvidence && previewMatchesRenderedSource && <div className="pdf-excel-source-details" aria-live="polite">
+      <p className="pdf-excel-source-details-lead">{sourceReviewPageLabel(displayEvidence.page, totalPages)}</p>
+      <p className="pdf-excel-source-details-lead">{sourceReviewSourceLabel(displayEvidence)}</p>
       {confidence && <p className="pdf-excel-source-details-lead">{confidence}</p>}
-      {cell && <p className="pdf-excel-source-details-cell">{sourceReviewCellLabel(cell)}</p>}
+      {detailsCell && <p className="pdf-excel-source-details-cell">{notice === "merged-subordinate"
+        ? `Merged source region: ${sourceReviewCellLabel(detailsCell)}`
+        : sourceReviewCellLabel(detailsCell)}</p>}
       <p className="pdf-excel-source-details-label">{SOURCE_REVIEW_COPY.sourceText}</p>
-      <p className="pdf-excel-source-text">{evidence.sourceText}</p>
+      <p className="pdf-excel-source-text">{displayEvidence.sourceText}</p>
     </div>}
   </div>;
 }

@@ -48,6 +48,27 @@ assert.equal(review.sourceReviewRotation(270, undefined), 270);
 assert.equal(review.sourceReviewRotation(Number.NaN, 90), 90);
 console.log('PASS: display rotation equals (page.rotate + evidence.rotation) % 360 for every quarter turn.');
 
+// 1b. Preview identity: only the source file, page and normalized evidence rotation define canvas currentness.
+const pageThree = review.sourceReviewPreviewIdentity('file-a', evidence());
+assert.equal(pageThree, review.sourceReviewPreviewIdentity('file-a',
+  evidence({ bbox: { left: .5, top: .5, width: .1, height: .1 }, sourceText: 'another cell' })),
+  'same-page cell changes must reuse the already truthful canvas');
+assert.notEqual(pageThree, review.sourceReviewPreviewIdentity('file-a', evidence({ page: 4 })),
+  'another page must wait for its own render');
+assert.notEqual(pageThree, review.sourceReviewPreviewIdentity('file-a', evidence({ rotation: 90 })),
+  'another evidence rotation must wait for its own render');
+assert.notEqual(pageThree, review.sourceReviewPreviewIdentity('file-b', evidence()),
+  'another source file must wait for its own render');
+assert.equal(review.sourceReviewPreviewIdentity('file-a', evidence({ rotation: -90 })),
+  review.sourceReviewPreviewIdentity('file-a', evidence({ rotation: 270 })),
+  'equivalent quarter turns share one normalized identity');
+assert.equal(review.sourceReviewPreviewIdentity('file-a', null), null);
+assert.equal(review.sourceReviewPreviewMatches(pageThree, pageThree), true);
+assert.equal(review.sourceReviewPreviewMatches(pageThree, review.sourceReviewPreviewIdentity('file-a', evidence({ page: 4 }))), false);
+assert.equal(review.sourceReviewPreviewMatches(pageThree, null), false);
+assert.equal(review.sourceReviewPreviewMatches(null, null), false);
+console.log('PASS: preview identity gates cross-page/rotation/file transitions without hiding same-page changes.');
+
 // 2. Bounded zoom and clamped retina rendering.
 assert.equal(review.clampSourceReviewZoom(0.4), review.SOURCE_REVIEW_MIN_ZOOM);
 assert.equal(review.clampSourceReviewZoom(4), review.SOURCE_REVIEW_MAX_ZOOM);
@@ -82,28 +103,117 @@ console.log('PASS: the first evidence-backed non-empty cell becomes the initial 
 const selected = review.describeSourceReviewSelection(table(), { row: 0, column: 1 });
 assert.equal(selected.notice, 'none');
 assert.equal(selected.evidence.sourceText, 'Amount');
+assert.equal(selected.previewEvidence, selected.evidence,
+  'an ordinary evidence-backed cell uses its own evidence for the preview');
 assert.equal(review.sourceReviewNoticeMessage(selected), null);
 const emptyCell = review.describeSourceReviewSelection(table(), { row: 2, column: 1 });
 assert.equal(emptyCell.notice, 'empty-cell'); assert.equal(emptyCell.evidence, null);
+assert.equal(emptyCell.previewEvidence, null, 'an empty cell must not borrow preview evidence');
 assert.equal(emptyCell.mergedAnchor, null, 'an empty cell must never borrow a merged anchor');
 assert.equal(review.sourceReviewNoticeMessage(emptyCell), 'This cell is empty, so there is no source text to highlight.');
 const whitespace = review.describeSourceReviewSelection(
   table({ rows: [['Item', 'Amount'], ['1001', 22960], ['   ', '']] }), { row: 2, column: 0 });
 assert.equal(whitespace.notice, 'empty-cell', 'whitespace-only cells are empty, not missing provenance');
 assert.equal(whitespace.evidence, null, 'an empty cell must never invent bbox, evidence or source text');
+assert.equal(whitespace.previewEvidence, null);
 const missing = review.describeSourceReviewSelection(table(), { row: 2, column: 0 });
 assert.equal(missing.notice, 'no-source-location', 'a non-empty cell without provenance must not get a fabricated box');
+assert.equal(missing.previewEvidence, null, 'missing provenance must not acquire a preview fallback');
 assert.equal(review.sourceReviewNoticeMessage(missing), 'No source location is available for this cell.',
   'a non-empty cell without provenance keeps the generic message');
 const merged = review.describeSourceReviewSelection(mergedTable, { row: 0, column: 1 });
 assert.equal(merged.notice, 'merged-subordinate', 'an empty merged subordinate keeps its own merged notice');
+assert.deepEqual(merged.cell, { row: 0, column: 1 }, 'the selected cell remains the merged subordinate');
+assert.equal(merged.evidence, null, 'the selected merged subordinate keeps its own null evidence');
+assert.equal(merged.previewEvidence, mergedTable.evidence[0][0],
+  'the preview may reuse only the real evidence stored on the merged anchor');
+assert.equal(merged.previewEvidence.sourceText, 'EARNINGS');
 assert.deepEqual(merged.mergedAnchor, { row: 0, column: 0 });
 assert.equal(review.sourceReviewNoticeMessage(merged), 'No separate source location is stored for this merged cell.');
+assert.equal(mergedTable.evidence[0][1], null, 'selection must not mutate subordinate evidence');
+const anchor = review.describeSourceReviewSelection(mergedTable, { row: 0, column: 0 });
+assert.equal(anchor.notice, 'none');
+assert.equal(anchor.evidence, mergedTable.evidence[0][0]);
+assert.equal(anchor.previewEvidence, anchor.evidence);
+assert.equal(anchor.mergedAnchor, null, 'selecting the anchor itself remains an ordinary selection');
+const mergedWithoutAnchorEvidence = review.describeSourceReviewSelection({ ...mergedTable,
+  evidence: [[null, null], mergedTable.evidence[1]] }, { row: 0, column: 1 });
+assert.equal(mergedWithoutAnchorEvidence.notice, 'merged-subordinate');
+assert.deepEqual(mergedWithoutAnchorEvidence.mergedAnchor, { row: 0, column: 0 });
+assert.equal(mergedWithoutAnchorEvidence.evidence, null);
+assert.equal(mergedWithoutAnchorEvidence.previewEvidence, null,
+  'a merged subordinate cannot invent a preview when its anchor has no evidence');
 assert.deepEqual(review.mergeAnchorCell(mergedTable, 0, 0), null, 'the merged anchor itself is not a subordinate');
 assert.equal(review.mergeAnchorCell(table(), 2, 0), null);
 assert.equal(review.describeSourceReviewSelection(undefined, null).notice, 'no-source-location');
 assert.equal(review.describeSourceReviewSelection(undefined, null).evidence, null);
-console.log('PASS: evidence, empty, missing-provenance and merged-subordinate selections stay truthful.');
+assert.equal(review.describeSourceReviewSelection(undefined, null).previewEvidence, null);
+assert.equal(review.describeSourceReviewSelection(undefined, null).retainPageContext, false,
+  'without a table there is no selection and nothing may be retained');
+assert.equal(selected.retainPageContext, false, 'a real evidence cell never needs a retained page');
+assert.equal(anchor.retainPageContext, false, 'a real merged anchor is an ordinary evidence cell');
+assert.equal(merged.retainPageContext, false, 'a real anchor preview must not use the empty fallback');
+assert.equal(missing.retainPageContext, false,
+  'a non-empty cell without provenance must never pretend to be an empty context');
+assert.equal(mergedWithoutAnchorEvidence.retainPageContext, false,
+  'a non-empty merged region keeps no page context when its provenance is missing');
+console.log('PASS: merged subordinates preview real anchor evidence while all selection identities stay truthful.');
+
+// 4b. Contextual page retention: only a genuinely empty selection may keep the rendered page.
+const emptyMergedTable = table({
+  rows: [['', ''], ['1001', 22960]],
+  evidence: [[null, null], [evidence({ sourceText: '1001' }), evidence()]],
+  merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 }] });
+const blankMergedAnchor = review.describeSourceReviewSelection(emptyMergedTable, { row: 0, column: 0 });
+assert.equal(blankMergedAnchor.notice, 'empty-cell', 'a blank merged anchor stays an ordinary empty cell');
+assert.equal(blankMergedAnchor.evidence, null);
+assert.equal(blankMergedAnchor.previewEvidence, null);
+assert.equal(blankMergedAnchor.mergedAnchor, null, 'the merged anchor keeps no borrowed anchor of its own');
+assert.equal(blankMergedAnchor.retainPageContext, true, 'a blank merged anchor may keep the page as context');
+const blankMergedSubordinate = review.describeSourceReviewSelection(emptyMergedTable, { row: 0, column: 1 });
+assert.deepEqual(blankMergedSubordinate.cell, { row: 0, column: 1 },
+  'clicking a blank merged subordinate keeps the selected cell identity');
+assert.equal(blankMergedSubordinate.notice, 'merged-subordinate');
+assert.equal(blankMergedSubordinate.evidence, null, 'a blank merged subordinate never gains evidence');
+assert.equal(blankMergedSubordinate.previewEvidence, null, 'a blank merged region has no anchor preview');
+assert.deepEqual(blankMergedSubordinate.mergedAnchor, { row: 0, column: 0 });
+assert.equal(blankMergedSubordinate.retainPageContext, true,
+  'a blank subordinate inside a blank merged region keeps the rendered page as context');
+assert.equal(review.sourceReviewNoticeMessage(blankMergedSubordinate),
+  'No separate source location is stored for this merged cell.',
+  'retaining the page must not change the truthful merged notice');
+assert.equal(emptyMergedTable.evidence[0][0], null, 'context retention must never write anchor evidence');
+assert.equal(emptyMergedTable.rows[0][1], '', 'context retention must never rewrite cell values');
+const whitespaceMergedRegion = review.describeSourceReviewSelection(table({
+  rows: [['   ', ''], ['1001', 22960]],
+  evidence: [[null, null], [evidence({ sourceText: '1001' }), evidence()]],
+  merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 }] }), { row: 0, column: 1 });
+assert.equal(whitespaceMergedRegion.retainPageContext, true,
+  'a whitespace-only merged region is empty and may keep the page as context');
+const partlyFilledMerge = review.describeSourceReviewSelection(table({
+  rows: [['', 'stray'], ['1001', 22960]],
+  evidence: [[null, null], [evidence({ sourceText: '1001' }), evidence()]],
+  merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 }] }), { row: 0, column: 1 });
+assert.equal(partlyFilledMerge.notice, 'merged-subordinate');
+assert.equal(partlyFilledMerge.previewEvidence, null);
+assert.equal(partlyFilledMerge.retainPageContext, false,
+  'a merged region that still holds text keeps no page context when its provenance is missing');
+const strayMergedAnchor = review.describeSourceReviewSelection(table({
+  rows: [['', 'stray'], ['1001', 22960]],
+  evidence: [[null, evidence({ sourceText: 'stray' })], [evidence({ sourceText: '1001' }), evidence()]],
+  merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 }] }), { row: 0, column: 0 });
+assert.equal(strayMergedAnchor.notice, 'empty-cell',
+  'a blank anchor coordinate is still an ordinary empty cell, not a subordinate');
+assert.equal(strayMergedAnchor.mergedAnchor, null, 'the merged anchor itself is never a subordinate');
+assert.equal(strayMergedAnchor.retainPageContext, true,
+  'an empty anchor coordinate keeps page context exactly like any other empty cell');
+assert.equal(review.isEmptySourceCellAt(emptyMergedTable, { row: 0, column: 0 }), true);
+assert.equal(review.isEmptySourceCellAt(table(), { row: 0, column: 0 }), false);
+assert.equal(review.isEmptySourceCellAt(emptyMergedTable, { row: 9, column: 9 }), false,
+  'an out-of-range coordinate is never treated as an empty retained context');
+assert.equal(review.isEmptySourceCellAt(undefined, { row: 0, column: 0 }), false);
+assert.equal(review.isEmptySourceCellAt(emptyMergedTable, null), false);
+console.log('PASS: blank cells and blank merged regions keep page context while every other selection retains none.');
 
 // 5. Highlight geometry: normalized evidence coordinates become percentages of the rendered page.
 assert.deepEqual(review.sourceReviewBoxStyle({ left: 0, top: .25, width: 1, height: .5 }),
@@ -138,6 +248,8 @@ for (const phrase of ['Source Review', 'Select a cell to see where it came from 
 assert.ok(component.includes('SOURCE_REVIEW_COPY.heading') && component.includes('SOURCE_REVIEW_COPY.instruction'));
 assert.ok(component.includes('firstEvidenceCell(tables[selected])'), 'initial selection must come from evidence');
 assert.ok(component.includes('describeSourceReviewSelection'));
+assert.ok(component.includes('previewEvidence={selection.previewEvidence}'),
+  'the viewer must receive preview evidence separately from selected-cell evidence');
 assert.ok(component.includes('onFocus={() => setActiveCell(') && component.includes('onClick={() => setActiveCell('),
   'keyboard focus and pointer interaction must both select a cell');
 assert.ok(component.includes('is-source-selected'));
@@ -160,13 +272,25 @@ assert.ok(viewer.includes('loadingTask') && viewer.includes('.destroy()'), 'the 
 assert.ok(viewer.includes('renderTaskRef.current?.cancel()'), 'an obsolete render task must be cancelled');
 assert.ok(viewer.includes('pageRef.current?.cleanup()'), 'page resources must be cleaned up');
 assert.ok(viewer.includes('renderedKeyRef.current === renderKey'), 'the same page and rotation must not rerender');
-assert.ok(viewer.includes('sourceReviewRotation(page.rotate, evidence.rotation ?? 0)'),
+assert.ok(viewer.includes('const displayEvidence = evidence ?? previewEvidence'),
+  'only the viewer may fall back from selected-cell evidence to merged-anchor preview evidence');
+assert.ok(viewer.includes('const desiredPreviewIdentity = sourceReviewPreviewIdentity(sourceFileKey(file), displayEvidence)'));
+assert.ok(viewer.includes('sourceReviewPreviewMatches(desiredPreviewIdentity, renderedPreviewIdentity)'),
+  'new evidence must be compared synchronously with the source actually painted into the canvas');
+assert.ok(viewer.includes('sourceReviewRotation(page.rotate, displayEvidence.rotation ?? 0)'),
   'page render and highlight must share one display rotation');
 assert.ok(!/transform:\s*rotate|rotateZ|rotate3d|-webkit-transform/i.test(viewer),
   'the highlight must not be CSS-rotated separately from the page');
 assert.ok(viewer.includes('clampSourceReviewPixelRatio(window.devicePixelRatio)'));
 assert.ok(viewer.includes('getContext("2d", { alpha: false })'));
-assert.ok(viewer.includes('sourceReviewBoxStyle(evidence.bbox)'));
+assert.ok(viewer.includes('sourceReviewBoxStyle(displayEvidence.bbox)'));
+assert.ok(viewer.includes('displayEvidence && previewMatchesRenderedSource &&'),
+  'highlight and details must remain hidden until the desired source is actually rendered');
+assert.ok(viewer.includes('style={previewIsPending ? { visibility: "hidden" } : undefined}'),
+  'a stale canvas must be visually unavailable while a different source identity renders');
+assert.ok(viewer.includes('notice === "merged-subordinate" && previewEvidence ? mergedAnchor : cell'),
+  'merged preview details must identify the real anchor source region');
+assert.ok(viewer.includes('Merged source region:'), 'merged fallback details must be explicit, not misleading');
 assert.ok(viewer.includes('role="img"') && viewer.includes('aria-live') && viewer.includes('role="alert"'));
 assert.ok(viewer.includes('aria-label="Zoom out"') && viewer.includes('aria-label="Zoom in"'));
 assert.ok(!/dangerouslySetInnerHTML/.test(viewer + component));
@@ -222,32 +346,68 @@ const viewportHeight = (selector) => {
 assert.equal(viewportHeight('.pdf-excel-table-scroll {'), viewportHeight('.pdf-excel-source-viewport {'),
   'both pane viewports must share one height so they stay visually aligned');
 console.log('PASS: the extracted table gets an independent display-only zoom toolbar aligned with the PDF pane.');
-// 11. Empty-cell UX: keep the rendered page, remove the highlight, never invent evidence.
+// 11. Empty-context UX: keep the rendered page, remove the highlight, never invent evidence.
 assert.ok(viewer.includes('sourceReviewNoticeMessage'), 'the viewer must reuse the shared notice copy');
-assert.ok(viewer.includes('notice === "empty-cell"'), 'the viewer must treat empty cells as their own state');
-assert.ok(/const showPreview = Boolean\(evidence\) \|\| notice === "empty-cell"/.test(viewer),
-  'an empty cell must keep the rendered page preview visible');
-assert.ok(viewer.includes('evidence && <span className="pdf-excel-source-highlight"'),
-  'the highlight must exist only for evidence-backed cells');
-assert.ok(viewer.includes('evidence && <div className="pdf-excel-source-details"'),
-  'page, source-type and source-text details must stay evidence-only');
-const emptyRetention = viewer.slice(viewer.indexOf('if (!evidence) {'), viewer.indexOf('setStatus("idle")'));
-assert.ok(/keepsRenderedPage = notice === "empty-cell" && renderedFileRef\.current === sourceFileKey\(file\)/.test(emptyRetention),
+assert.ok(viewer.includes('retainPageContext'), 'the viewer must receive the retention decision from the selection');
+assert.ok(!viewer.includes('notice === "empty-cell"'),
+  'the viewer must never guess the contextual-retention decision from notice strings');
+assert.ok(component.includes('retainPageContext={selection.retainPageContext}'),
+  'the selection contract must pass the retention decision to the viewer unchanged');
+assert.ok(viewer.includes('const keepsRenderedPage = retainPageContext && renderedFileRef.current === sourceFileKey(file)'),
+  'only a genuinely empty selection of the current file may keep the rendered page');
+assert.ok(/const showPreview = Boolean\(displayEvidence\) \|\| \(retainPageContext && renderedPageLabel !== ""\)/.test(viewer),
+  'an empty context keeps the rendered page preview visible while a real one is required');
+assert.ok(viewer.includes('displayEvidence && previewMatchesRenderedSource &&'),
+  'the highlight must still require a real selected or merged-anchor evidence object');
+assert.ok(viewer.includes('previewMatchesRenderedSource && <div className="pdf-excel-source-details"'),
+  'page, source-type and source-text details must require a current rendered source');
+const emptyRetention = viewer.slice(viewer.indexOf('if (!displayEvidence) {'), viewer.indexOf('setStatus("idle")'));
+assert.ok(/keepsRenderedPage = retainPageContext && renderedFileRef\.current === sourceFileKey\(file\)/.test(emptyRetention),
   'the retained page must belong to the current source file');
 assert.ok(emptyRetention.indexOf('keepsRenderedPage') < emptyRetention.indexOf('cleared.width = 0'),
-  'the retained page is dropped whenever the notice is not about emptiness or the file changed');
-assert.ok(viewer.includes('setRenderedPageLabel(sourceReviewPageLabel(evidence.page, totalPages))'),
+  'the retained page is dropped whenever the selection is not an empty context or the file changed');
+assert.ok(viewer.includes('setRenderedPageLabel(sourceReviewPageLabel(displayEvidence.page, totalPages))'),
   'the retained page keeps its real page label instead of an invented one');
 const fileReset = viewer.slice(viewer.indexOf('A replaced source file invalidates'), viewer.indexOf('}, [file]);'));
 assert.ok(fileReset.includes('renderedFileRef.current = ""') && fileReset.includes('renderedKeyRef.current = ""'),
   'a replaced file must invalidate the retained page identity');
 assert.ok(fileReset.includes('cleared.width = 0') && fileReset.includes('setRenderedPageLabel("")'),
   'a replaced file must clear the retained page canvas and label');
+assert.ok(fileReset.includes('setRenderedPreviewIdentity(null)') && fileReset.includes('setStatusPreviewIdentity(null)'),
+  'a replaced file must also drop the rendered identity that gates the retained page');
+assert.ok(fileReset.includes('renderedFileRef.current = ""') &&
+  viewer.includes('renderedFileRef.current === sourceFileKey(file)'),
+  'a retained context can only ever survive while the canvas belongs to the current source file');
 const emptyPreview = review.describeSourceReviewSelection(table(), { row: 2, column: 1 });
 assert.equal(emptyPreview.notice, 'empty-cell');
 assert.equal(emptyPreview.evidence, null, 'an empty cell can never carry a bbox or source text');
+assert.equal(emptyPreview.previewEvidence, null, 'empty-cell page retention must not depend on borrowed evidence');
 assert.equal(emptyPreview.mergedAnchor, null);
-console.log('PASS: empty cells keep the rendered page without a highlight and never invent source evidence.');
+assert.equal(emptyPreview.retainPageContext, true, 'an ordinary empty cell allows context retention');
+assert.equal(review.describeSourceReviewSelection(emptyMergedTable, { row: 0, column: 1 }).retainPageContext, true,
+  'a blank merged subordinate keeps page context instead of blanking the viewer');
+assert.equal(review.describeSourceReviewSelection(emptyMergedTable, { row: 0, column: 1 }).previewEvidence, null,
+  'a blank merged subordinate keeps the context without a fabricated highlight source');
+assert.equal(review.describeSourceReviewSelection(mergedTable, { row: 0, column: 1 }).retainPageContext, false,
+  'a merged subordinate with real anchor evidence uses the real anchor preview, never the empty fallback');
+assert.equal(review.describeSourceReviewSelection(mergedTable, { row: 0, column: 1 }).previewEvidence.sourceText, 'EARNINGS');
+console.log('PASS: empty selections keep the rendered page without a highlight and never invent source evidence.');
+
+// 11b. Transitional truthfulness: rendered identity advances only after successful rendering.
+const renderStart = viewer.indexOf('const task = page.render({');
+const renderFinish = viewer.indexOf('await task.promise;', renderStart);
+const renderPromotion = viewer.indexOf('setRenderedPreviewIdentity(desiredPreviewIdentity);', renderFinish);
+assert.ok(renderStart >= 0 && renderFinish > renderStart && renderPromotion > renderFinish,
+  'a source identity may become current only after its page render finishes successfully');
+const renderCatch = viewer.indexOf('} catch (caught)', renderPromotion);
+assert.ok(renderCatch > renderPromotion);
+assert.equal(viewer.slice(renderCatch).includes('setRenderedPreviewIdentity(desiredPreviewIdentity)'), false,
+  'failed or cancelled renders must never promote their desired source identity');
+assert.ok(viewer.includes('setRenderedPreviewIdentity(null)') && viewer.includes('setStatusPreviewIdentity(null)'),
+  'file replacement and evidence-free clearing must invalidate prior rendered/status identities');
+assert.ok(viewer.includes('previewIsPending && !(statusMatchesDesiredSource && status === "error")'),
+  'a new source must show loading rather than a stale prior ready/error state');
+console.log('PASS: cross-page transitions hide stale canvas/evidence until successful render completion.');
 
 // 12. Uploader copy derives the real page limit from the engine constant.
 const toExcelSource = fs.readFileSync(path.resolve('lib/pdf/to-excel.ts'), 'utf8');

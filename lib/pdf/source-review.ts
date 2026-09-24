@@ -59,8 +59,26 @@ export function sourceReviewRotation(pageRotation: number, evidenceRotation = 0)
   return (Math.round(wrapped / 90) * 90) % 360;
 }
 
+/** Stable identity for the source page/orientation requested by an evidence-backed preview. */
+export function sourceReviewPreviewIdentity(fileIdentity: string, evidence: PdfCellEvidence | null) {
+  if (!evidence) return null;
+  return `${fileIdentity}|page:${evidence.page}|rotation:${sourceReviewRotation(0, evidence.rotation ?? 0)}`;
+}
+
+/** A preview is truthful only when its desired source is the source actually painted to canvas. */
+export function sourceReviewPreviewMatches(desiredIdentity: string | null, renderedIdentity: string | null) {
+  return desiredIdentity !== null && desiredIdentity === renderedIdentity;
+}
+
 export function isEmptySourceCell(value: ExcelCellValue | undefined) {
   return String(value ?? "").trim() === "";
+}
+
+/** Whether the extracted table really holds an empty value at this exact coordinate. */
+export function isEmptySourceCellAt(table: ExtractedPdfTable | undefined, cell: SourceReviewCell | null) {
+  if (!table || !cell) return false;
+  const row = table.rows[cell.row];
+  return Boolean(row) && isEmptySourceCell(row[cell.column]);
 }
 
 export function cellEvidence(table: ExtractedPdfTable | undefined, row: number, column: number) {
@@ -98,24 +116,46 @@ export function mergeAnchorCell(table: ExtractedPdfTable | undefined, row: numbe
 export type SourceReviewSelection = {
   cell: SourceReviewCell | null;
   evidence: PdfCellEvidence | null;
+  /** Real evidence used only to display the selected cell's source region. */
+  previewEvidence: PdfCellEvidence | null;
   notice: SourceReviewNotice;
   mergedAnchor: SourceReviewCell | null;
+  /**
+   * Display-only: the already rendered page may stay on screen as context because the selection
+   * is a genuinely empty region that has no source location of its own. It never carries
+   * evidence, a highlight, source details or an invented source text.
+   */
+  retainPageContext: boolean;
 };
 
 export function describeSourceReviewSelection(
   table: ExtractedPdfTable | undefined,
   cell: SourceReviewCell | null,
 ): SourceReviewSelection {
-  if (!table || !cell) return { cell: cell ?? null, evidence: null, notice: "no-source-location", mergedAnchor: null };
+  if (!table || !cell) return { cell: cell ?? null, evidence: null, previewEvidence: null,
+    notice: "no-source-location", mergedAnchor: null, retainPageContext: false };
   const evidence = cellEvidence(table, cell.row, cell.column);
-  if (evidence) return { cell, evidence, notice: "none", mergedAnchor: null };
+  if (evidence) return { cell, evidence, previewEvidence: evidence, notice: "none", mergedAnchor: null,
+    retainPageContext: false };
   const mergedAnchor = mergeAnchorCell(table, cell.row, cell.column);
-  if (mergedAnchor) return { cell, evidence: null, notice: "merged-subordinate", mergedAnchor };
+  if (mergedAnchor) {
+    // A merged subordinate keeps its own null evidence and may only ever preview the real evidence
+    // stored on its anchor. When that anchor has none, page context may stay on screen only when
+    // the selected subordinate and the anchor are both genuinely empty; a non-empty merged region
+    // whose provenance went missing stays conservative and retains nothing.
+    const anchorEvidence = cellEvidence(table, mergedAnchor.row, mergedAnchor.column);
+    const emptyMergedRegion = anchorEvidence === null &&
+      isEmptySourceCellAt(table, mergedAnchor) && isEmptySourceCellAt(table, cell);
+    return { cell, evidence: null, previewEvidence: anchorEvidence, notice: "merged-subordinate",
+      mergedAnchor, retainPageContext: emptyMergedRegion };
+  }
   // A genuinely empty cell has no source text at all; keep it distinct from a non-empty
   // cell that simply has no stored provenance. Neither case may invent evidence.
   const row = table.rows[cell.row];
-  if (row && isEmptySourceCell(row[cell.column])) return { cell, evidence: null, notice: "empty-cell", mergedAnchor: null };
-  return { cell, evidence: null, notice: "no-source-location", mergedAnchor: null };
+  if (row && isEmptySourceCell(row[cell.column])) return { cell, evidence: null, previewEvidence: null,
+    notice: "empty-cell", mergedAnchor: null, retainPageContext: true };
+  return { cell, evidence: null, previewEvidence: null, notice: "no-source-location", mergedAnchor: null,
+    retainPageContext: false };
 }
 
 export function sourceReviewNoticeMessage(selection: SourceReviewSelection) {
