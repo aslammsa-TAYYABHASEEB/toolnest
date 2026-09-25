@@ -58,6 +58,11 @@
   --space-20: 5rem;
   --space-24: 6rem;
 
+  /* Layout widths */
+  --container-content: 72rem;
+  --container-app: 84rem;
+  --container-workspace: 96rem;
+
   /* Shape, elevation, motion */
   --radius-sm: .5rem;
   --radius-md: .75rem;

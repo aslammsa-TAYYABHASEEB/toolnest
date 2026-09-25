@@ -4,7 +4,7 @@ import { categories, siteConfig } from "@/lib/site";
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      <div className="container footer-grid">
+      <div className="container-app footer-grid">
         <div>
           <Link className="brand footer-brand" href="/">
             <span className="brand-mark" aria-hidden="true">T</span>
@@ -25,7 +25,7 @@ export function SiteFooter() {
           <Link href="/disclaimer">Disclaimer</Link>
         </div>
       </div>
-      <div className="container footer-bottom">
+      <div className="container-app footer-bottom">
         <p>© {new Date().getFullYear()} ToolNest. All rights reserved.</p>
         <p>Fast by default. Private by design.</p>
       </div>

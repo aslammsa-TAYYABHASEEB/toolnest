@@ -12,7 +12,7 @@ const navItems = [
 export function SiteHeader() {
   return (
     <header className="site-header">
-      <div className="container nav-shell">
+      <div className="container-app nav-shell">
         <Link className="brand" href="/" aria-label="ToolNest home">
           <span className="brand-mark" aria-hidden="true">T</span>
           <span>Tool<span>Nest</span></span>

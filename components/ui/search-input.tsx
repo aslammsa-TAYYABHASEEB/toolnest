@@ -33,7 +33,7 @@ export function SearchInput({ label = "Search tools", className, ...props }: Sea
   const showResults = normalizedQuery.length > 0;
 
   return (
-    <div style={{ position: "relative", width: "100%" }}>
+    <div className="search-control">
       <label className={cn("search-input", className)}>
         <span className="sr-only">{label}</span>
         <span className="search-icon" aria-hidden="true" />
@@ -53,31 +53,21 @@ export function SearchInput({ label = "Search tools", className, ...props }: Sea
       {showResults && (
         <div
           id={resultsId}
-          className="nav-dropdown-menu"
+          className="search-results"
           role="list"
           aria-label="Tool search results"
-          style={{
-            top: "calc(100% + .5rem)",
-            left: 0,
-            right: "auto",
-            width: "100%",
-            minWidth: "16rem",
-            maxHeight: "20rem",
-            overflowY: "auto",
-            zIndex: 60,
-          }}
         >
           {results.length > 0 ? (
             results.map((tool) => (
               <Link key={tool.name} href={tool.href!} role="listitem">
-                <strong style={{ display: "block" }}>{tool.name}</strong>
-                <span style={{ display: "block", marginTop: ".15rem", fontSize: ".75rem", fontWeight: 500, color: "var(--color-text-muted)" }}>
+                <strong>{tool.name}</strong>
+                <span>
                   {tool.description}
                 </span>
               </Link>
             ))
           ) : (
-            <p style={{ margin: 0, padding: ".65rem .7rem", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
+            <p className="search-empty">
               No tools found
             </p>
           )}

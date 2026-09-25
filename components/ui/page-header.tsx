@@ -14,7 +14,7 @@ type PageHeaderProps = {
 export function PageHeader({ title, description, eyebrow, icon, accent, compact }: PageHeaderProps) {
   return (
     <header className={cn("page-header", accent && `accent-${accent}`, compact && "page-header-compact")}>
-      <div className="container">
+      <div className="container-app">
         <Breadcrumbs current={title} />
         <div className="page-header-row">
           {icon && <span className="page-header-icon" aria-hidden="true">{icon}</span>}
