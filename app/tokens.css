@@ -80,15 +80,15 @@
 
 html[data-theme="dark"] {
   --color-bg: #0d111c;
-  --color-surface: #141a27;
-  --color-surface-raised: #1a2130;
-  --color-surface-muted: #202838;
+  --color-surface: #161c2a;
+  --color-surface-raised: #1d2535;
+  --color-surface-muted: #232c3d;
   --color-surface-brand: #242144;
   --color-text: #f1f4f9;
   --color-text-muted: #a6afbf;
   --color-text-subtle: #7e899b;
-  --color-border: #293244;
-  --color-border-strong: #3a455a;
+  --color-border: #303b50;
+  --color-border-strong: #424f66;
   --color-focus: #a99fff;
   --color-brand-50: #211e3f;
   --color-brand-100: #2c2855;

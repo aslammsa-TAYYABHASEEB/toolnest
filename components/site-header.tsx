@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { categories } from "@/lib/site";
+import { BrowseAllMenu } from "@/components/ui/browse-all-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -22,14 +23,7 @@ export function SiteHeader() {
 
         <nav className="desktop-nav" aria-label="Main navigation">
           {navItems.slice(0, 2).map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
-          <details className="nav-dropdown">
-            <summary>Browse all</summary>
-            <div className="nav-dropdown-menu">
-              {categories.map((category) => (
-                <Link key={category.slug} href={`/categories/${category.slug}`}>{category.name}</Link>
-              ))}
-            </div>
-          </details>
+          <BrowseAllMenu />
         </nav>
 
         <div className="header-actions">

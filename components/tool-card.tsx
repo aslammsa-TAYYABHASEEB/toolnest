@@ -1,22 +1,25 @@
 import Link from "next/link";
 import type { Tool } from "@/lib/site";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 
 export function ToolCard({ tool }: { tool: Tool }) {
   const href = tool.href ?? `/categories/${tool.category}`;
 
   return (
-    <Card as="article" className="tool-card" interactive>
+    <Link
+      className="ui-card ui-card-interactive tool-card"
+      href={href}
+      aria-label={tool.available ? `Open ${tool.name}` : `View ${tool.name} category`}
+    >
       <div className="tool-card-top">
         <span className="tool-icon" aria-hidden="true">{tool.icon}</span>
         {!tool.available && <Badge>Coming soon</Badge>}
       </div>
       <h3>{tool.name}</h3>
       <p>{tool.description}</p>
-      <Link href={href} aria-label={tool.available ? `Open ${tool.name}` : `View ${tool.name} category`}>
+      <span className="tool-card-cta">
         {tool.available ? "Open tool" : "View category"} <span aria-hidden="true">→</span>
-      </Link>
-    </Card>
+      </span>
+    </Link>
   );
 }
