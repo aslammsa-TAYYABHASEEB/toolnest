@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Category } from "@/lib/site";
-import { Badge } from "@/components/ui/badge";
 
 export function CategoryCard({ category, count }: { category: Category; count: number }) {
   return (
@@ -9,7 +8,7 @@ export function CategoryCard({ category, count }: { category: Category; count: n
       <span className="category-copy">
         <strong>{category.name}</strong>
         <span>{category.description}</span>
-        <Badge>{count} tools</Badge>
+        <span className="category-count">{count} tools</span>
       </span>
       <span className="round-arrow" aria-hidden="true">→</span>
     </Link>

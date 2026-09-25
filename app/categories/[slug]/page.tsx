@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ToolCard } from "@/components/tool-card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
-import { UploadDropzone } from "@/components/ui/upload-dropzone";
 import { categories, getCategory, getToolsByCategory, siteConfig } from "@/lib/site";
 
 type PageProps = { params: Promise<{ slug: string }> };
@@ -64,43 +61,18 @@ export default async function CategoryPage({ params }: PageProps) {
   if (!category) notFound();
   const categoryTools = getToolsByCategory(category.slug);
   const availableTools = categoryTools.filter((tool) => tool.available);
-  const hasAvailableTools = availableTools.length > 0;
 
   return (
     <>
       <PageHeader title={category.name} description={category.description} eyebrow="Tool category" accent={category.accent} icon={category.icon} />
-      <section className="section">
-        <div className="container">
-          <div className="section-heading compact"><div><h2>{category.shortName} tools</h2></div><p>{availableTools.length} free tools available now.</p></div>
+      <section className="section category-page">
+        <div className="container-app">
+          <div className="section-heading compact"><div><span className="kicker">Available now</span><h2>{category.shortName} tools</h2></div><p>{availableTools.length} free tools ready to use.</p></div>
           <div className="tool-grid">{availableTools.map((tool) => <ToolCard key={tool.name} tool={tool} />)}</div>
-          <div className="category-preview-grid">
-            {!hasAvailableTools && <UploadDropzone />}
-            <aside className="coming-soon-panel">
-              <Badge tone={hasAvailableTools ? "success" : "brand"}>
-                {hasAvailableTools
-                  ? `${availableTools.length} ${availableTools.length === 1 ? "tool" : "tools"} available`
-                  : "More tools planned"}
-              </Badge>
-              <h2>{hasAvailableTools ? category.privateHeading : "Tools are coming soon"}</h2>
-              <p>{hasAvailableTools ? category.availableDescription : "This category is still in preview. No files or data are processed here."}</p>
-              {hasAvailableTools ? (
-                <div className="category-tool-actions">
-                  {availableTools.map((tool, index) => (
-                    <Button
-                      key={tool.name}
-                      href={tool.href ?? `/categories/${category.slug}`}
-                      variant={index === 0 ? "primary" : "secondary"}
-                      size="sm"
-                    >
-                      Open {tool.name}
-                    </Button>
-                  ))}
-                </div>
-              ) : (
-                <Button href="/#categories" variant="secondary" size="sm">Back to all categories</Button>
-              )}
-            </aside>
-          </div>
+          <aside className="category-summary">
+            <span className="category-icon" aria-hidden="true">{category.icon}</span>
+            <div><h2>{category.privateHeading}</h2><p>{category.availableDescription}</p></div>
+          </aside>
         </div>
       </section>
     </>
