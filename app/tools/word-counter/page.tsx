@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { WordCounter } from "@/components/word-counter";
 import { PageHeader } from "@/components/ui/page-header";
+import { ToolPageShell } from "@/components/ui/tool-page-shell";
+import { TrustStrip } from "@/components/ui/trust-strip";
 import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
@@ -83,11 +85,17 @@ export default function WordCounterPage() {
         icon="W"
       />
 
-      <section className="tool-page-section">
-        <div className="container">
-          <WordCounter />
-        </div>
-      </section>
+      <ToolPageShell
+        trust={
+          <TrustStrip
+            title="Your text stays in this browser"
+            description="Counting, timing, and keyword analysis happen on your device."
+            items={["No account", "No text upload", "Live results"]}
+          />
+        }
+      >
+        <WordCounter />
+      </ToolPageShell>
 
       <section className="section section-tint tool-content">
         <div className="container">

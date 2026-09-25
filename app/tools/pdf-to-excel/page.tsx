@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { PdfToExcel } from "@/components/pdf-to-excel";
 import { PageHeader } from "@/components/ui/page-header";
+import { ToolPageShell } from "@/components/ui/tool-page-shell";
+import { TrustStrip } from "@/components/ui/trust-strip";
 import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
@@ -17,6 +19,17 @@ const faqs = [
 export default function PdfToExcelPage() {
   const structuredData = { "@context": "https://schema.org", "@graph": [{ "@type": "SoftwareApplication", name: "PDF to Excel Table Extractor", applicationCategory: "BusinessApplication", operatingSystem: "Any with a modern web browser", url: `${siteConfig.url}/tools/pdf-to-excel`, description, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } }, { "@type": "FAQPage", mainEntity: faqs.map(({ question, answer }) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) }] };
   return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} /><PageHeader title="PDF to Excel Table Extractor" description="Turn tables from text PDFs and scanned pages into editable Excel worksheets or CSV files—without uploading your document." eyebrow="PDF tool" accent="coral" icon="XLS" />
-    <section className="tool-page-section"><div className="container tool-page-grid"><PdfToExcel /><aside className="tool-side-note"><span className="kicker">Private by design</span><h2>Structured data, processed locally</h2><p>ToolNest looks for clear rows and columns, previews the extracted cells, and builds the spreadsheet in your browser.</p><ul><li>Excel (.xlsx) with one sheet per table</li><li>CSV for an individual table</li><li>On-device OCR for scanned pages</li><li>No PDF upload or paid OCR service</li></ul></aside></div></section>
+    <ToolPageShell
+      width="wide"
+      trust={
+        <TrustStrip
+          title="Structured data, processed locally"
+          description="ToolNest reads tables and builds spreadsheet files in your browser."
+          items={["Excel and CSV", "On-device OCR", "No PDF upload", "Source stays unchanged"]}
+        />
+      }
+    >
+      <PdfToExcel />
+    </ToolPageShell>
     <section className="section section-tint tool-content"><div className="container"><div className="tool-copy-grid"><article><span className="kicker">What it does</span><h2>Recover editable table data</h2><p>The extractor identifies regular table geometry and turns cell contents into rows and columns that you can review before download.</p></article><article><span className="kicker">How to use it</span><h2>Select, analyze, review, download</h2><ol><li>Select one PDF.</li><li>Choose Analyze tables.</li><li>Review or edit detected cells.</li><li>Download all tables as Excel or one table as CSV.</li></ol></article><article><span className="kicker">Text and scans</span><h2>Two local extraction paths</h2><p>Selectable PDF text keeps its measured positions. Image-only pages use on-device OCR and the same conservative table model.</p></article><article><span className="kicker">Honest limits</span><h2>Clear grids work best</h2><p>Irregular tables, merged cells, handwriting, multi-column prose, and low-quality scans may need correction. Uncertain layouts are not forced into a table.</p></article></div><div className="faq-section"><span className="kicker">Helpful answers</span><h2>PDF to Excel FAQs</h2><div>{faqs.map(({ question, answer }) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></div></div></section><RelatedTools currentHref="/tools/pdf-to-excel" /></>;
 }

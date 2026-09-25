@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ImageResizer } from "@/components/image-resizer";
 import { PageHeader } from "@/components/ui/page-header";
+import { ToolPageShell } from "@/components/ui/tool-page-shell";
+import { TrustStrip } from "@/components/ui/trust-strip";
 import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
@@ -86,24 +88,17 @@ export default function ImageResizerPage() {
         accent="violet"
         icon="IMG"
       />
-      <section className="tool-page-section">
-        <div className="container tool-page-grid">
-          <ImageResizer />
-          <aside className="tool-side-note">
-            <span className="kicker">Precise and private</span>
-            <h2>Resize on your device</h2>
-            <p>
-              Set exact dimensions or choose a percentage. Your browser performs
-              every step without an upload or server queue.
-            </p>
-            <ul>
-              <li>Aspect ratio lock</li>
-              <li>Up to 20 MB</li>
-              <li>JPG, PNG, and WebP</li>
-            </ul>
-          </aside>
-        </div>
-      </section>
+      <ToolPageShell
+        trust={
+          <TrustStrip
+            title="Resize on your device"
+            description="Your image is processed locally without an upload or server queue."
+            items={["Aspect ratio lock", "Up to 20 MB", "JPG, PNG, and WebP"]}
+          />
+        }
+      >
+        <ImageResizer />
+      </ToolPageShell>
 
       <section className="section section-tint tool-content">
         <div className="container">

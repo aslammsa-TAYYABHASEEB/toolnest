@@ -7,7 +7,7 @@ export function RelatedTools({ currentHref }: { currentHref: string }) {
 
   return (
     <section className="related-tools-section" aria-labelledby="related-tools-heading">
-      <div className="container">
+      <div className="container-app">
         <div className="related-tools-heading">
           <div>
             <span className="kicker">Continue your workflow</span>

@@ -29,7 +29,7 @@ export default function OrganizePdfPage() {
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
     <PageHeader title="Organize PDF" description="Put every page in its place. Reorder, rotate, remove, and combine pages in one private workspace." eyebrow="PDF tool" accent="coral" icon="▦" />
-    <section className="tool-page-section"><div className="container"><PdfOrganize /></div></section>
+    <section className="tool-page-section"><div className="container-workspace"><PdfOrganize /></div></section>
     <section className="section section-tint tool-content"><div className="container">
       <div className="tool-copy-grid"><article><span className="kicker">Simple workflow</span><h2>Choose. Arrange. Download.</h2><p>Start with a PDF, select the pages you want to change, and create your organized document. The numbered grid always shows the output order.</p></article><article><span className="kicker">Original quality</span><h2>Previews are not the output</h2><p>Small previews keep the workspace responsive. Your download copies original PDF pages without rasterization, including mixed portrait and landscape page sizes.</p></article><article><span className="kicker">Private by design</span><h2>Nothing to upload</h2><p>PDF parsing, page changes, and downloads happen in your browser. No account, paid OCR service, or server processing is required.</p></article></div>
       <div className="faq-section"><span className="kicker">Helpful answers</span><h2>Organize PDF FAQs</h2>{faqs.map(({ question, answer }) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div>
