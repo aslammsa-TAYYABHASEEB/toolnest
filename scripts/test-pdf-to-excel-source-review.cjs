@@ -589,6 +589,21 @@ assert.ok(!/transform/.test(component.slice(component.indexOf('pdf-excel-table-s
   component.indexOf('pdf-excel-edit-note">{mergeNotice'))), 'table zoom must not rely on CSS transforms');
 console.log('PASS: long cell text auto-grows to its content while the controlled value and zoom stay display-only.');
 
+// 15. Preserved table titles: display-only heading above the editable matrix.
+assert.ok(component.includes('{table.title ? <p className="pdf-excel-table-title">{table.title}</p> : null}'),
+  'the preserved heading renders above the editable table viewport');
+assert.ok(component.indexOf('pdf-excel-table-title') < component.indexOf('pdf-excel-table-scroll" style='),
+  'the title renders before the table grid, never inside rows or evidence');
+const titleEditScope = component.slice(component.indexOf('function editCell'), component.indexOf('const progressText'));
+assert.ok(!titleEditScope.includes('title'), 'cell edits never rewrite the preserved title');
+assert.ok(styles.includes('.pdf-excel-table-title {') && reviewStyles.includes('.pdf-excel-table-title {'),
+  'the title style stays inside the Source Review scope');
+const titleStyle = reviewStyles.slice(reviewStyles.indexOf('.pdf-excel-table-title {'),
+  reviewStyles.indexOf('.pdf-excel-table-scroll tr td.is-source-selected'));
+assert.ok(/white-space: pre-line/.test(titleStyle) && !/animation|transition|transform/.test(titleStyle),
+  'the title is plain wrapped display text');
+console.log('PASS: preserved table titles render display-only above the editable matrix.');
+
 console.log('PASS: PDF to Excel Source Review unit and UI contract checks completed.');
 
 

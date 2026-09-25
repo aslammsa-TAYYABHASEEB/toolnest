@@ -66,7 +66,8 @@ function locate(edges: number[], value: number) {
   return -1;
 }
 
-function pageTextItems(text: TextContent, viewport: ReturnType<PDFPageProxy["getViewport"]>) {
+/** Exported for PDF-to-Excel title recovery; unchanged geometry normalization. */
+export function pageTextItems(text: TextContent, viewport: ReturnType<PDFPageProxy["getViewport"]>) {
   const [a, b, c, d, e, f] = viewport.transform;
   return text.items.flatMap(item => {
     if (!("str" in item) || !item.str.trim()) return [];

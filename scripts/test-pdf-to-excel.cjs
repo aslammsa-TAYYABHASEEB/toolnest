@@ -32,6 +32,7 @@ const { extractVectorGridTables } = require('../lib/pdf/vector-table.ts');
 const { extractScannedGridTables } = require('../lib/pdf/scanned-table.ts');
 const { rotateCanvas } = require('../lib/pdf/ocr-render.ts');
 const { isIdentifierLikeColumnHeading, parseConservativeNumericLiteral } = require('../lib/pdf/cell-semantics.ts');
+const { evidenceTitleBox, selectTableTitle, titleLinesFromTextItems, titlePageFromBlocks } = require('../lib/pdf/table-title.ts');
 const output = path.resolve('work/pdf-excel-qa');
 fs.mkdirSync(output, { recursive:true });
 
@@ -245,6 +246,15 @@ async function unlabeledSummaryFixture() {
   drawGrid(page,font,[['Label','Due','Drawn'],['Period 1','100','200'],['','',''],['','300','400']],{y:540});
   return pdf.save();
 }
+async function tableTitleFixture() {
+  const pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica),page=pdf.addPage([470,650]);
+  page.drawText('REVISED INCOME STATEMENT',{x:44,y:545,size:14,font});
+  page.drawText('For the year ended 31 March 2025',{x:44,y:525,size:11,font});
+  drawGrid(page,font,[['Particulars','Category','Amount'],['Opening balance','Asset','1,200'],
+    ['Closing balance','Asset','3,450']],{y:510,widths:[170,110,90],rowHeight:34});
+  page.drawText('Prepared for internal review.',{x:44,y:330,size:11,font});
+  return pdf.save();
+}
 const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
 (async()=>{
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -265,7 +275,7 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
     }));
     return {tables,pageCount:pages.length,scannedPageCount:0};
   }
-  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture(), numeric:await numericEvidenceFixture(), irregular:await irregularSpanningFixture(), latent:await latentAmountColumnFixture(), unbounded:await unboundedRightCellFixture(), identifier:await identifierRightColumnFixture() };
+  const fixtures = { native:await nativeFixture(), multi:await multiFixture(), scanned:await scannedFixture(), none:await noTableFixture(), wide:await wideMergedFixture(), stacked:await stackedCellFixture(), vertical:await verticalFixture(), summary:await unlabeledSummaryFixture(), titled:await tableTitleFixture(), numeric:await numericEvidenceFixture(), irregular:await irregularSpanningFixture(), latent:await latentAmountColumnFixture(), unbounded:await unboundedRightCellFixture(), identifier:await identifierRightColumnFixture() };
   for(const [name,bytes] of Object.entries(fixtures)) fs.writeFileSync(path.join(output,`${name}.pdf`),bytes);
   const routedMulti=await excel.extractPdfTables(file(fixtures.multi,'multi.pdf'));
   assert.equal(routedMulti.tables.length,1,'real routing must retain one continued table');
@@ -373,6 +383,74 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
   assert.ok(isIdentifierLikeColumnHeading('Sr. No.'));assert.ok(!isIdentifierLikeColumnHeading('Total'));
   for(const [source,expected] of [['0',0],['-2500',-2500],['(2,500)',-2500],['1,234.50',1234.5],['1234.5',1234.5]]) assert.equal(parseConservativeNumericLiteral(source),expected);
   for(const source of ['0012','600000/-','12,00,001','1595496-12,00,000 =','(395496x 15%)','12-05-2023','BS-03']) assert.equal(parseConservativeNumericLiteral(source),null);
+  // 14. Preserved table titles: conservative heading selection, display-only outputs.
+  const titleLine=(text,baseline,size=14,segments=[{left:44,right:300}])=>({text,left:44,right:300,
+    top:baseline-size,bottom:baseline+size*.2,size,segments});
+  const titleRegion={left:40,right:360,top:110,bottom:240};
+  assert.equal(selectTableTitle([titleLine('STATEMENT OF ACCOUNTS',80)],titleRegion),
+    'STATEMENT OF ACCOUNTS','a heading directly above the table becomes the title');
+  assert.equal(selectTableTitle([titleLine('HEADER ONE',49),titleLine('HEADER TWO',80)],titleRegion),
+    'HEADER ONE\nHEADER TWO','up to three adjacent heading lines combine in reading order');
+  assert.equal(selectTableTitle([titleLine('Far away prose',20)],titleRegion),undefined,
+    'distant body prose is never adopted as a title');
+  assert.equal(selectTableTitle([titleLine('ID Amount',80,[{left:44,right:90},{left:230,right:300}])],titleRegion),
+    undefined,'space-aligned tabular rows are not headings');
+  assert.equal(selectTableTitle([titleLine('Page 7',80)],titleRegion),undefined,'pagination lines are dropped');
+  assert.equal(selectTableTitle([titleLine('Explanation of the figures presented in this table for review.',80)],
+    titleRegion),undefined,'terminal-sentence body prose is dropped');
+  const stackedFour=[37,52,67,82].map(baseline=>titleLine('Stacked '+baseline,baseline));
+  assert.equal(selectTableTitle(stackedFour,titleRegion),undefined,
+    'a wider tightly stacked column above the heading blocks adoption');
+  assert.equal(selectTableTitle([titleLine('STATEMENT OF ACCOUNTS',80)],titleRegion,
+    [{left:0,right:460,top:50,bottom:100}]),undefined,'a sibling table above blocks the same heading');
+  const nativeTitleLines=titleLinesFromTextItems([
+    {text:'HEADER',x:60,y:47,dx:1,dy:0,startX:44,startY:47,left:44,right:90,size:14},
+    {text:'ONE',x:110,y:47,dx:1,dy:0,startX:96,startY:47,left:96,right:130,size:14},
+    {text:'HEADER TWO',x:100,y:85,dx:1,dy:0,startX:44,startY:85,left:44,right:220,size:14}]);
+  assert.deepEqual(nativeTitleLines.map(line=>line.text),['HEADER ONE','HEADER TWO'],
+    'native PDF text runs join into heading lines by baseline');
+  assert.equal(selectTableTitle(nativeTitleLines,titleRegion),'HEADER ONE\nHEADER TWO',
+    'native text items select exactly like normalized lines');
+  const ocrTitlePage=titlePageFromBlocks({width:470,height:650,blocks:[
+    {kind:'heading',lines:[{spans:[{text:'OCR HEADING',x:44,y:85,width:150,size:14,bold:true,italic:false,
+      font:'Arial',underline:false}],x:44,right:194,y:85,size:14}],x:44,right:194,y:85,bottom:87.8,
+      alignment:'center',firstIndent:0,pitch:17},
+    {kind:'table',x:40,right:400,y:110,bottom:240,edges:[],rows:[],rowHeights:[],ruled:true}]});
+  assert.equal(selectTableTitle(ocrTitlePage.lines,titleRegion),'OCR HEADING',
+    'OCR layout paragraphs become candidates while table blocks stay excluded');
+  const boxed=evidenceTitleBox([[{bbox:{left:40/470,top:110/650,width:360/470,height:130/650}},null]],470,650);
+  assert.ok(boxed && Math.abs(boxed.left-40)<.01 && Math.abs(boxed.top-110)<.01 &&
+    Math.abs(boxed.right-400)<.01 && Math.abs(boxed.bottom-240)<.01,
+    'normalized evidence maps back to page-space title geometry');
+  assert.equal(evidenceTitleBox([[null]],470,650),undefined,'evidence-free tables keep no title geometry');
+  const titled=await excel.extractPdfTables(file(fixtures.titled,'table-title.pdf'));
+  assert.equal(titled.tables.length,1,'the titled fixture yields one vector table');
+  const titledTable=titled.tables[0];
+  assert.equal(titledTable.method,'vector-grid');
+  assert.equal(titledTable.title,'REVISED INCOME STATEMENT\nFor the year ended 31 March 2025',
+    'the heading directly above the table is preserved verbatim');
+  assert.ok(!titledTable.rows.flat(2).join(' ').includes('REVISED'),
+    'the title never leaks into the extracted matrix');
+  assertEvidenceInvariant(titled);
+  const titledZip=unzipSync(new Uint8Array(await excel.createExcelWorkbook([titledTable]).arrayBuffer()));
+  const titledSheet=strFromU8(titledZip['xl/worksheets/sheet1.xml']);
+  assert.match(titledSheet,/<mergeCell ref="A1:C1"\/>/,'the title is merged across every table column');
+  assert.match(titledSheet,/<c r="A1" s="1" t="inlineStr"><is><t xml:space="preserve">REVISED INCOME STATEMENT\nFor the year ended 31 March 2025<\/t><\/is><\/c>/,
+    'the XLSX keeps the wrapped title text above the matrix');
+  assert.match(titledSheet,/<row r="2" ht="9" customHeight="1"><\/row>/,'a blank spacer row separates title and matrix');
+  assert.match(titledSheet,/<row r="3"[^>]*><c r="A3" t="inlineStr" s="1"><is><t>Particulars<\/t><\/is><\/c>/,
+    'the matrix shifts below the title and spacer rows');
+  assert.match(titledSheet,/<pane ySplit="3" topLeftCell="A4"/,'the freeze pane offsets with the matrix');
+  assert.match(titledSheet,/<autoFilter ref="A3:C5"\/>/,'the auto-filter offsets with the matrix');
+  const titledCsv=(await excel.createTableCsv(titledTable).text()).replace(/^\uFEFF/,'');
+  assert.ok(!titledCsv.includes('REVISED'),'CSV export keeps the matrix only, without the title');
+  assert.match(titledCsv,/^Particulars,Category,Amount/,'CSV stays exactly the original matrix');
+  assert.equal(routedMulti.tables[0].title,undefined,'a table without an adjacent heading keeps no title');
+  assert.equal(irregularTable.title,undefined,'far-away prose above the page is never adopted');
+  const plainSheet=strFromU8(unzipSync(new Uint8Array(
+    await excel.createExcelWorkbook([routedMulti.tables[0]]).arrayBuffer()))['xl/worksheets/sheet1.xml']);
+  assert.match(plainSheet,/<pane ySplit="1" topLeftCell="A2"/,'without a title the worksheet layout is unchanged');
+  assert.match(plainSheet,/<autoFilter ref="A1:C6"\/>/,'the untouched sheet keeps its original filter range');
   const native=await extractNative(fixtures.native);
   assert.equal(native.tables.length,1); assert.equal(native.tables[0].rows.length,4); assert.equal(native.tables[0].rows[0].length,3);
   assert.equal(native.tables[0].rows[2][1],''); assert.equal(native.tables[0].rows[1][2],25.5); assert.equal(native.tables[0].rows[1][0],1001);
