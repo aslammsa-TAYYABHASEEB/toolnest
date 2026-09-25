@@ -319,6 +319,38 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
     assert.ok(table.merges.every(merge=>!(merge.startRow<=1&&merge.endRow>=1)),'Upper multiplication row retains the six real columns');
   }
   assertEvidenceInvariant(latent);
+  // 13. Real extracted merges through the display plan, with output semantics unchanged.
+  const { tableViewPlan, tableViewSelection } = require('../lib/pdf/table-view.ts');
+  const mergeSources=[['irregular',irregularTable],['latent',latent.tables[0]]];
+  const matrixSnapshot=JSON.stringify(mergeSources.map(([,source])=>[source.rows,source.merges]));
+  const planArea=(plan,source)=>plan.rows.reduce((total,row)=>total+row.reduce((sum,cell)=>sum+cell.rowSpan*cell.colSpan,0),0)===
+    source.rows.reduce((total,row)=>total+row.length,0);
+  for(const [label,source] of mergeSources){
+    const plan=tableViewPlan(source);
+    assert.equal(plan.skipped.length,0,`${label}: every extracted merge must render as a real span`);
+    assert.equal(plan.applied.length,source.merges.length,`${label}: all extracted merges are applied exactly once`);
+    assert.ok(planArea(plan,source),`${label}: every matrix coordinate is covered exactly once by the plan`);
+    for(const merge of plan.applied){
+      const anchor=plan.rows[merge.startRow].find(cell=>cell.column===merge.startColumn);
+      assert.equal(anchor.rowSpan,merge.endRow-merge.startRow+1,`${label}: rowSpan matches table.merges`);
+      assert.equal(anchor.colSpan,merge.endColumn-merge.startColumn+1,`${label}: colSpan matches table.merges`);
+      assert.equal(plan.rows[merge.endRow].some(cell=>cell.column>merge.startColumn&&cell.column<=merge.endColumn),false,
+        `${label}: covered subordinates are not rendered`);
+      assert.deepEqual(tableViewSelection(plan,{row:merge.endRow,column:merge.endColumn}),
+        {row:merge.startRow,column:merge.startColumn},`${label}: a covered coordinate selects its anchor`);
+    }
+  }
+  assert.equal(JSON.stringify(mergeSources.map(([,source])=>[source.rows,source.merges])),matrixSnapshot,
+    'Rendering plans must never rewrite the extracted matrices or merges');
+  const irregularPlan=tableViewPlan(irregularTable);
+  assert.deepEqual(irregularPlan.rows[4][0],{row:4,column:0,rowSpan:1,colSpan:3,merged:true});
+  assert.deepEqual(irregularPlan.rows[4][1],{row:4,column:3,rowSpan:1,colSpan:1,merged:false});
+  const irregularCsv=(await excel.createTableCsv(irregularTable).text()).replace(/^\uFEFF/,'').split('\r\n');
+  assert.equal(irregularCsv[4],'Tax due,,,75','CSV still exports the original matrix, not the rendered merged cell');
+  const irregularSheet=strFromU8(unzipSync(new Uint8Array(await excel.createExcelWorkbook([irregularTable]).arrayBuffer()))['xl/worksheets/sheet1.xml']);
+  assert.match(irregularSheet,/<mergeCell ref="A5:C5"\/>/,'XLSX merge output is unchanged by the preview rendering');
+  assert.match(irregularSheet,/<c r="A5" t="inlineStr"><is><t>Tax due<\/t><\/is><\/c>/);
+  console.log('PASS: real extracted merges render as spans without changing the matrix, CSV or XLSX output.');
   const unbounded=await excel.extractPdfTables(file(fixtures.unbounded,'unbounded-right-cell.pdf'));
   assert.equal(unbounded.tables.length,1);assert.equal(unbounded.tables[0].method,'vector-grid');
   const unboundedTable=unbounded.tables[0];
@@ -411,6 +443,26 @@ const file=(bytes,name)=>new File([bytes],name,{type:'application/pdf'});
     assert.ok(Math.abs(groupEvidence.bbox.width-360/840)<.015,'Merged anchor evidence spans all six columns');
     for(let column=1;column<=5;column++) assert.equal(table.evidence[0][column],null,'Merged subordinate evidence is null');
   }
+  // 13b. The same plan over the two-page wide table and the stacked split cell.
+  for(const source of vectorWide.map(pageTables=>pageTables[0])){
+    const widePlan=tableViewPlan(source);
+    assert.equal(widePlan.skipped.length,0,'Wide group headers must render as one spanning cell');
+    assert.equal(widePlan.applied.length,source.merges.length);
+    assert.equal(widePlan.rows[0][0].colSpan,6,'A1:F1 group header keeps its real colSpan');
+    assert.deepEqual(widePlan.rows[0].map(cell=>cell.column),[0,6],'Only the real second-column group cell is rendered besides the anchor');
+    assert.deepEqual(tableViewSelection(widePlan,{row:0,column:5}),{row:0,column:0});
+  }
+  const stackedPlan=tableViewPlan(stacked);
+  assert.equal(stackedPlan.rows[2].length,3);
+  assert.equal(stackedPlan.rows[2][0].rowSpan,2,'A stacked split cell keeps its real rowSpan');
+  assert.equal(stackedPlan.rows[2][1].rowSpan,2);
+  assert.equal(stackedPlan.rows[2][0].merged,true);
+  assert.equal(stackedPlan.rows[2][2].merged,false);
+  assert.deepEqual(stackedPlan.rows[3].map(cell=>cell.column),[2],
+    'Both covered columns are skipped in the covered stacked row');
+  assert.deepEqual(tableViewSelection(stackedPlan,{row:3,column:1}),{row:2,column:1},
+    'A stacked subordinate coordinate selects its real anchor');
+
   const wideWorkbook=excel.createExcelWorkbook(vectorWide.map((pageTables,index)=>({id:`wide-${index}`,name:`Payroll ${index+1}`,pageStart:index+1,pageEnd:index+1,source:'native',rows:pageTables[0].rows.map(row=>row.map(excel.inferExcelCellValue)),merges:pageTables[0].merges,headerRows:pageTables[0].headerRows})));
   const wideZip=unzipSync(new Uint8Array(await wideWorkbook.arrayBuffer()));
   const wideSheet=strFromU8(wideZip['xl/worksheets/sheet1.xml']), wideStyles=strFromU8(wideZip['xl/styles.xml']);

@@ -8,6 +8,7 @@ globalThis.DOMMatrix = canvas.DOMMatrix; globalThis.ImageData = canvas.ImageData
 Promise.try ??= (callback, ...args) => Promise.resolve().then(() => callback(...args));
 const review = require('../lib/pdf/source-review.ts');
 const { extractVectorGridTables } = require('../lib/pdf/vector-table.ts');
+const tableView = require('../lib/pdf/table-view.ts');
 // Map the app's "@/..." alias for the lib modules whose own imports rely on it
 // (same resolver patch the PDF-to-Excel pipeline test already uses).
 const Module = require('node:module');
@@ -253,11 +254,12 @@ assert.ok(component.includes('previewEvidence={selection.previewEvidence}'),
 assert.ok(component.includes('onFocus={() => setActiveCell(') && component.includes('onClick={() => setActiveCell('),
   'keyboard focus and pointer interaction must both select a cell');
 assert.ok(component.includes('is-source-selected'));
-assert.ok(component.includes('<textarea') && component.includes('onChange={(event) => editCell('));
+assert.ok(component.includes('<AutoGrowTextarea') && component.includes('onChange={(event) => editCell('));
 assert.ok(component.includes('createTableCsv') && component.includes('createExcelWorkbook'));
 assert.ok(component.includes('Download this table (.csv)') && component.includes('Download Excel (.xlsx)'));
 assert.ok(component.includes('p. {item.pageStart}'), 'table page-range labels must remain');
-assert.ok(component.includes('rows={String(cell).includes("\\n") ? 2 : 1}'), 'cell textarea sizing must remain');
+assert.ok(component.includes('value={String(table.rows[cell.row][cell.column] ?? "")}'),
+  'every rendered cell keeps one controlled value from its real matrix coordinate');
 const editCell = component.slice(component.indexOf('function editCell'), component.indexOf('const progressText'));
 assert.ok(!editCell.includes('evidence'), 'editing a cell must never rewrite extracted evidence');
 assert.ok(!editCell.includes('setActiveCell'), 'editing a cell must not move the Source Review selection');
@@ -419,6 +421,174 @@ assert.ok(!component.includes('up to 300 pages'), 'the page limit must never be 
 assert.equal(`One PDF · ${formatPdfBytes(MAX_PDF_TOTAL_SIZE)} maximum · up to ${pageLimit} pages`,
   'One PDF · 100 MB maximum · up to 300 pages', 'the uploader must advertise the real limits');
 console.log('PASS: the uploader advertises the real 300-page PDF-to-Excel limit from the engine constant.');
+// 13. Merge rendering: table.merges becomes real colSpan/rowSpan and covered coordinates are skipped.
+const spanning = table({
+  rows: [['EARNINGS', '', '', '', '', 100], ['Total', '', '', '', '', 15]],
+  evidence: [[evidence({ sourceText: 'EARNINGS' }), null, null, null, null, evidence({ sourceText: '100' })],
+    [evidence({ sourceText: 'Total' }), null, null, null, null, null]],
+  merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 }] });
+const spanningPlan = tableView.tableViewPlan(spanning);
+assert.equal(spanningPlan.rows[0].length, 2, 'an A:E merge renders one anchor cell plus the untouched column F');
+assert.deepEqual(spanningPlan.rows[0][0], { row: 0, column: 0, rowSpan: 1, colSpan: 5, merged: true });
+assert.deepEqual(spanningPlan.rows[0][1], { row: 0, column: 5, rowSpan: 1, colSpan: 1, merged: false });
+assert.equal(spanningPlan.rows[0].some((planCell) => planCell.column > 0 && planCell.column < 5), false,
+  'no subordinate <td> is produced for a covered coordinate');
+assert.deepEqual(spanningPlan.applied, [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 }]);
+assert.deepEqual(spanningPlan.skipped, [], 'a faithful merge needs no structure warning');
+assert.deepEqual(tableView.tableViewCellAt(spanningPlan, 0, 3), spanningPlan.rows[0][0],
+  'a covered coordinate resolves to the one rendered anchor cell instead of its own <td>');
+assert.equal(spanningPlan.rows[0].some((planCell) => planCell.column === 3), false,
+  'no plan cell is ever produced for a covered coordinate');
+assert.equal(tableView.tableViewCellAt(spanningPlan, 0, 0).colSpan, 5);
+
+const stackedTable = table({ rows: [['Group', 'A'], ['', 'B'], ['', 'C']],
+  merges: [{ startRow: 0, endRow: 2, startColumn: 0, endColumn: 0 }] });
+const stackedPlan = tableView.tableViewPlan(stackedTable);
+assert.deepEqual(stackedPlan.rows[0][0], { row: 0, column: 0, rowSpan: 3, colSpan: 1, merged: true });
+assert.deepEqual(stackedPlan.rows[1].map((planCell) => planCell.column), [1],
+  'a vertically covered row skips the covered coordinate');
+assert.deepEqual(stackedPlan.rows[2].map((planCell) => planCell.column), [1]);
+assert.deepEqual(tableView.tableViewCellAt(stackedPlan, 2, 0), { row: 0, column: 0, rowSpan: 3, colSpan: 1, merged: true });
+
+const blockPlan = tableView.tableViewPlan(table({ rows: [['Block', ''], ['', '']],
+  merges: [{ startRow: 0, endRow: 1, startColumn: 0, endColumn: 1 }] }));
+assert.deepEqual(blockPlan.rows[0][0], { row: 0, column: 0, rowSpan: 2, colSpan: 2, merged: true });
+assert.deepEqual(blockPlan.rows[1], [], 'a fully covered row renders no <td> at all');
+
+const plainPlan = tableView.tableViewPlan(table());
+assert.deepEqual(plainPlan.rows.map((row) => row.map((planCell) =>
+  [planCell.row, planCell.column, planCell.rowSpan, planCell.colSpan, planCell.merged])),
+  [[[0, 0, 1, 1, false], [0, 1, 1, 1, false]], [[1, 0, 1, 1, false], [1, 1, 1, 1, false]],
+    [[2, 0, 1, 1, false], [2, 1, 1, 1, false]]],
+  'a table without merges renders every coordinate normally');
+assert.deepEqual(plainPlan.applied, []); assert.deepEqual(plainPlan.skipped, []);
+assert.equal(tableView.tableViewCellAt(plainPlan, 1, 1).merged, false,
+  'an unmerged coordinate resolves to its own rendered cell');
+assert.deepEqual(tableView.tableViewPlan(undefined), { rows: [], applied: [], skipped: [] });
+assert.deepEqual(tableView.tableViewPlan(table({ rows: [] })).rows, []);
+assert.equal(tableView.tableViewPlan({ ...table(), rows: [['A', 'B'], ['C']] }).rows[1].length, 1,
+  'a short row keeps its real length');
+console.log('PASS: horizontal, vertical and unmerged regions render through real colSpan/rowSpan from table.merges.');
+
+// 13b. Selection normalization, anchor-only editing and defensiveness against unusable merges.
+assert.deepEqual(tableView.tableViewSelection(spanningPlan, { row: 0, column: 3 }), { row: 0, column: 0 },
+  'clicking or reviewing inside a merged region selects the real merge anchor coordinate');
+assert.deepEqual(tableView.tableViewSelection(spanningPlan, { row: 0, column: 5 }), { row: 0, column: 5 },
+  'an ordinary cell keeps selecting itself');
+assert.deepEqual(tableView.tableViewSelection(stackedPlan, { row: 1, column: 0 }), { row: 0, column: 0 });
+assert.equal(tableView.tableViewSelection(spanningPlan, null), null);
+assert.deepEqual(tableView.tableViewSelection(spanningPlan, { row: 9, column: 9 }), { row: 9, column: 9 },
+  'an out-of-matrix selection is never silently rewritten');
+const reviewedSubordinate = review.describeSourceReviewSelection(spanning, { row: 0, column: 3 });
+assert.equal(reviewedSubordinate.notice, 'merged-subordinate',
+  'provenance still resolves the real reviewed coordinate instead of the displayed anchor');
+assert.equal(reviewedSubordinate.evidence, null);
+assert.equal(reviewedSubordinate.previewEvidence.sourceText, 'EARNINGS',
+  'the merged subordinate still previews only the real anchor evidence');
+assert.deepEqual(reviewedSubordinate.mergedAnchor, { row: 0, column: 0 });
+
+const editedAnchorRows = spanning.rows.map((row) => [...row]);
+const renderedAnchor = tableView.tableViewCellAt(spanningPlan, 0, 0);
+editedAnchorRows[renderedAnchor.row][renderedAnchor.column] = 'EDITED';
+assert.deepEqual(editedAnchorRows[0], ['EDITED', '', '', '', '', 100],
+  'the rendered merged cell writes only its real anchor coordinate');
+const rowsBefore = JSON.stringify(spanning.rows), mergesBefore = JSON.stringify(spanning.merges);
+tableView.tableViewPlan(spanning);
+assert.equal(JSON.stringify(spanning.rows), rowsBefore, 'rendering must never rewrite table.rows');
+assert.equal(JSON.stringify(spanning.merges), mergesBefore, 'rendering must never rewrite table.merges');
+assert.notEqual(spanningPlan.applied[0], spanning.merges[0], 'the plan never aliases the stored merge objects');
+assert.equal(tableView.tableViewPlan(Object.freeze({ ...spanning,
+  rows: Object.freeze(spanning.rows.map((row) => Object.freeze([...row]))),
+  merges: Object.freeze([Object.freeze({ ...spanning.merges[0] })]) })).rows[0][0].colSpan, 5,
+  'a frozen extracted table must render unchanged');
+
+const hidingPlan = tableView.tableViewPlan(table({ rows: [['EARNINGS', '32,000', '', '', '', 100]],
+  merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 }] }));
+assert.deepEqual(hidingPlan.applied, [], 'a merge that would hide a stored value is never applied');
+assert.deepEqual(hidingPlan.skipped, [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 }]);
+assert.equal(hidingPlan.rows[0].length, 6, 'the conservative fallback keeps every coordinate visible');
+assert.equal(tableView.tableViewMergeNotice(hidingPlan),
+  '1 merged region is shown cell by cell because the stored values underneath would otherwise be hidden.');
+assert.equal(tableView.tableViewMergeNotice(spanningPlan), null, 'a faithful table renders no structure note');
+for (const merge of [{ startRow: 1, endRow: 0, startColumn: 0, endColumn: 1 },
+  { startRow: 0, endRow: 0, startColumn: 2, endColumn: 0 },
+  { startRow: 0, endRow: 0, startColumn: 0, endColumn: 9 },
+  { startRow: 0, endRow: 8, startColumn: 0, endColumn: 1 },
+  { startRow: Number.NaN, endRow: 0, startColumn: 0, endColumn: 1 }]) {
+  const unusable = tableView.tableViewPlan(table({ merges: [merge] }));
+  assert.deepEqual(unusable.applied, [], `unusable merge ${JSON.stringify(merge)} must never be applied`);
+  assert.equal(unusable.rows[0].length, 2, 'every coordinate stays rendered when a merge is unusable');
+  assert.equal(unusable.skipped.length, 1);
+}
+const overlappingPlan = tableView.tableViewPlan(table({ rows: [['a', '', ''], ['b', '', '']],
+  merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 2 }, { startRow: 0, endRow: 1, startColumn: 0, endColumn: 0 }] }));
+assert.equal(overlappingPlan.applied.length, 1, 'only the first of two overlapping merges may drive the rendering');
+assert.equal(overlappingPlan.skipped.length, 1);
+assert.equal(overlappingPlan.rows[0][0].colSpan, 3);
+const singlePlan = tableView.tableViewPlan(table({ merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 }] }));
+assert.deepEqual(singlePlan.applied, []); assert.deepEqual(singlePlan.skipped, [],
+  'a 1x1 region is not a merge and hides nothing');
+const duplicatePlan = tableView.tableViewPlan(table({ rows: [['Group', '', 'x'], ['y', '', 'z']],
+  merges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 },
+    { startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 }] }));
+assert.equal(duplicatePlan.applied.length, 1); assert.deepEqual(duplicatePlan.skipped, [],
+  'the same region described twice renders once and needs no warning');
+console.log('PASS: merged anchors stay editable and unusable merges fall back without hiding or rewriting data.');
+
+// 13c. Component contract: the preview renders the plan, selects real coordinates and keeps downloads on the matrix.
+const mergeRender = component.slice(component.indexOf('pdf-excel-table-scroll" style='),
+  component.indexOf('pdf-excel-edit-note">{mergeNotice'));
+assert.ok(mergeRender.includes('{tableView.rows.map((row, rowIndex) => <tr key={rowIndex}>'),
+  'the preview must render the merge-aware plan');
+assert.ok(!mergeRender.includes('table.rows.map((row, rowIndex)'),
+  'the preview must not render every matrix coordinate independently');
+assert.ok(mergeRender.includes('rowSpan={cell.rowSpan > 1 ? cell.rowSpan : undefined}') &&
+  mergeRender.includes('colSpan={cell.colSpan > 1 ? cell.colSpan : undefined}'),
+  'rendered spans must come from table.merges through the plan');
+assert.ok(mergeRender.includes('visibleSelection && visibleSelection.row === cell.row && visibleSelection.column === cell.column'),
+  'the selected-cell styling must follow the normalized visible selection');
+assert.ok(component.includes('const tableView = useMemo(() => tableViewPlan(table), [table])'));
+assert.ok(component.includes('const visibleSelection = tableViewSelection(tableView, activeCell)'));
+assert.ok(component.includes('{mergeNotice && <p className="pdf-excel-edit-note">{mergeNotice}</p>}'));
+assert.ok(component.includes('onReviewCell={setActiveCell}'),
+  'Automatic Checks navigation must keep selecting the real reviewed coordinate');
+assert.ok(component.includes('onFocus={() => setActiveCell({ row: cell.row, column: cell.column })}') &&
+  component.includes('onClick={() => setActiveCell({ row: cell.row, column: cell.column })}'),
+  'focus and click must select the rendered real coordinate, which is the anchor inside a merged region');
+assert.ok(component.includes('createTableCsv(table)') && component.includes('createExcelWorkbook(nextTables)'),
+  'downloads must keep consuming the original extracted table instead of the rendered DOM');
+assert.ok(!/create(TableCsv|ExcelWorkbook)\([^)]*tableView/.test(component));
+assert.ok(component.includes('onChange={(event) => editCell(cell.row, cell.column, event.target.value)}'),
+  'an edit must target the rendered real coordinate only');
+console.log('PASS: the preview renders table.merges, keeps anchors editable and leaves downloads on the matrix.');
+
+// 14. Long text: one small auto-growing textarea keeps the controlled value and grows to its content.
+const autoGrow = fs.readFileSync(path.resolve('components/ui/auto-grow-textarea.tsx'), 'utf8');
+assert.ok(autoGrow.includes('<textarea') && autoGrow.includes('useLayoutEffect'),
+  'the shared textarea must measure its content after paint');
+assert.ok(autoGrow.includes('element.style.height = "auto"') && autoGrow.includes('element.scrollHeight'),
+  'the height must be derived from the real content height');
+assert.ok(autoGrow.includes('[value, zoom]'),
+  'the height must be re-measured after value edits, table changes and zoom changes');
+assert.ok(autoGrow.includes('{...textareaProps}') && autoGrow.includes('value={value}'),
+  'the controlled value stays owned by the caller and is never rewritten');
+assert.ok(!autoGrow.includes('contentEditable') && !autoGrow.includes('rows='),
+  'auto-grow replaces the fixed row heuristic without contentEditable');
+assert.ok(component.includes('<AutoGrowTextarea') && component.includes('zoom={tableZoom}'),
+  'every extracted cell renders the auto-growing textarea and re-measures with the display zoom');
+assert.ok(!component.includes('rows={'), 'the preview must not force a fixed textarea height');
+assert.ok(/\.pdf-excel-table-scroll textarea \{[^}]*resize: none/.test(styles),
+  'a manual resize handle must not fight the measured height');
+assert.ok(/\.pdf-excel-table-scroll textarea \{[^}]*overflow-y: hidden/.test(styles),
+  'no internal scrollbar may appear while the cell still fits its content');
+assert.ok(/\.pdf-excel-table-scroll textarea \{[^}]*min-height: calc\(2\.5rem \* var\(--table-zoom\)\)/.test(styles),
+  'an empty cell keeps its zoom-scaled minimum height');
+assert.ok(!/tableView[A-Za-z]*\([^)]*tableZoom/.test(component),
+  'the merge plan must stay independent of the display-only zoom');
+assert.ok(!/transform/.test(component.slice(component.indexOf('pdf-excel-table-scroll" style='),
+  component.indexOf('pdf-excel-edit-note">{mergeNotice'))), 'table zoom must not rely on CSS transforms');
+console.log('PASS: long cell text auto-grows to its content while the controlled value and zoom stay display-only.');
+
 console.log('PASS: PDF to Excel Source Review unit and UI contract checks completed.');
 
 
