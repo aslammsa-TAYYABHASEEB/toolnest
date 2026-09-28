@@ -11,7 +11,6 @@ type TrustStripProps = {
 export function TrustStrip({ label = "Private processing", title, description, items = [] }: TrustStripProps) {
   return (
     <aside className="trust-strip">
-      <span className="trust-strip-mark" aria-hidden="true">✓</span>
       <div className="trust-strip-copy">
         <span className="trust-strip-label">{label}</span>
         <strong>{title}</strong>

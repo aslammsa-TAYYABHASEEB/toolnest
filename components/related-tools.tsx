@@ -10,10 +10,9 @@ export function RelatedTools({ currentHref }: { currentHref: string }) {
       <div className="container-app">
         <div className="related-tools-heading">
           <div>
-            <span className="kicker">Continue your workflow</span>
             <h2 id="related-tools-heading">Related tools</h2>
           </div>
-          <p>Useful next steps, with the same simple ToolNest experience.</p>
+          <p>Continue with a nearby task.</p>
         </div>
         <div className="related-tools-list">
           {relatedTools.map((tool) => (
@@ -23,7 +22,6 @@ export function RelatedTools({ currentHref }: { currentHref: string }) {
                 <strong>{tool.name}</strong>
                 <small>{tool.description}</small>
               </span>
-              <span aria-hidden="true">→</span>
             </Link>
           ))}
         </div>
