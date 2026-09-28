@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { PercentageCalculator } from "@/components/percentage-calculator";
 import { PageHeader } from "@/components/ui/page-header";
+import { ToolPageShell } from "@/components/ui/tool-page-shell";
+import { TrustStrip } from "@/components/ui/trust-strip";
 import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
@@ -88,11 +90,17 @@ export default function PercentageCalculatorPage() {
         icon="%"
       />
 
-      <section className="tool-page-section">
-        <div className="container">
-          <PercentageCalculator />
-        </div>
-      </section>
+      <ToolPageShell
+        trust={
+          <TrustStrip
+            label="Local calculation"
+            title="Calculated on this device"
+            description="Entered values and results remain in this browser session."
+          />
+        }
+      >
+        <PercentageCalculator />
+      </ToolPageShell>
 
       <section className="section section-tint tool-content">
         <div className="container">

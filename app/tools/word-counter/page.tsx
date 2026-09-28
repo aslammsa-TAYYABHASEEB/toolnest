@@ -88,9 +88,10 @@ export default function WordCounterPage() {
       <ToolPageShell
         trust={
           <TrustStrip
-            title="Your text stays in this browser"
+            label="Local text processing"
+            title="Text stays on this device"
             description="Counting, timing, and keyword analysis happen on your device."
-            items={["No account", "No text upload", "Live results"]}
+            items={["Text not sent to ToolNest", "Live results"]}
           />
         }
       >

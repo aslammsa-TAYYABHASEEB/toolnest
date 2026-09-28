@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ImageToText } from "@/components/image-to-text";
 import { PageHeader } from "@/components/ui/page-header";
+import { ToolPageShell } from "@/components/ui/tool-page-shell";
+import { TrustStrip } from "@/components/ui/trust-strip";
 import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
@@ -29,7 +31,18 @@ export default function ImageToTextPage() {
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
     <PageHeader title="Image to Text" description="Extract the words from a photo, scan, or screenshot. Review, edit, and keep the text—all on your device." eyebrow="Image tool" accent="violet" icon="Aa" />
-    <section className="tool-page-section"><div className="container"><ImageToText /></div></section>
+    <ToolPageShell
+      trust={
+        <TrustStrip
+          label="Local OCR"
+          title="Processed on this device"
+          description="Text extraction runs in your browser and the image content stays local."
+          items={["File not uploaded", "OCR language data may be downloaded", "Review important wording"]}
+        />
+      }
+    >
+      <ImageToText />
+    </ToolPageShell>
     <section className="section section-tint tool-content"><div className="container">
       <div className="tool-copy-grid"><article><span className="kicker">Simple workflow</span><h2>Choose. Read. Reuse.</h2><p>Drop an image, select Extract Text, then check the result against your original. Copy the words into another document or save a text file.</p></article><article><span className="kicker">Useful everyday OCR</span><h2>From screenshots to scanned pages</h2><p>Turn a JPG photo or PNG screenshot into editable English text. Clean, upright images work best. Your original file stays unchanged.</p></article><article><span className="kicker">Honest results</span><h2>Recognized, not rewritten</h2><p>No dictionary silently changes your text. OCR may misread letters and numbers, so review important content before using it.</p></article></div>
       <div className="faq-section"><span className="kicker">Helpful answers</span><h2>Image to Text FAQs</h2>{faqs.map(({ question, answer }) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div>

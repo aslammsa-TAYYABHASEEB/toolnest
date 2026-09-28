@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { DocumentPrivacy } from "@/components/document-privacy";
 import { RelatedTools } from "@/components/related-tools";
 import { PageHeader } from "@/components/ui/page-header";
+import { ToolPageShell } from "@/components/ui/tool-page-shell";
+import { TrustStrip } from "@/components/ui/trust-strip";
 import { siteConfig } from "@/lib/site";
 
 const title = "PDF Sanitizer & Privacy Checker";
@@ -19,7 +21,19 @@ export default function DocumentPrivacyPage() {
   const structuredData = { "@context": "https://schema.org", "@graph": [{ "@type": "SoftwareApplication", name: "PDF Sanitizer & Privacy Checker", applicationCategory: "SecurityApplication", operatingSystem: "Any with a modern web browser", url: `${siteConfig.url}/tools/document-privacy`, description, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } }, { "@type": "FAQPage", mainEntity: faqs.map(({ question, answer }) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) }] };
   return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
     <PageHeader title="PDF Sanitizer & Privacy Checker" description="Check what your PDF carries besides its visible pages. Remove selected privacy traces locally, then verify the cleaned copy." eyebrow="PDF privacy tool" accent="coral" icon="PDF" />
-    <section className="tool-page-section"><div className="container tool-page-grid"><DocumentPrivacy /><aside className="tool-side-note"><span className="kicker">Evidence before action</span><h2>Inspect first, remove selectively</h2><p>ToolNest explains what it found, what can be removed, what verification proved, and what still needs manual review.</p><ul><li>Private browser processing</li><li>Source file remains unchanged</li><li>Verified supported removals</li><li>No misleading privacy score</li></ul></aside></div></section>
+    <ToolPageShell
+      width="wide"
+      trust={
+        <TrustStrip
+          label="Inspection and verification"
+          title="Processed on this device"
+          description="Inspect first, remove selected supported traces, then recheck the new copy."
+          items={["File not uploaded", "Source file stays unchanged", "Verified supported removals", "Uncertainty remains visible"]}
+        />
+      }
+    >
+      <DocumentPrivacy />
+    </ToolPageShell>
     <section className="section section-tint tool-content"><div className="container"><div className="tool-copy-grid"><article><span className="kicker">Inspection</span><h2>See more than visible pages</h2><p>Review metadata, XMP, attachments, executable actions, comments, forms, links, hidden text evidence, possible fake redactions, layers, thumbnails, and image-metadata signals.</p></article><article><span className="kicker">Sanitization</span><h2>Remove only supported categories</h2><p>Create a separate copy without selected metadata, embedded files, JavaScript or Launch actions, external URI actions, and review comments. The original is never overwritten.</p></article><article><span className="kicker">Verification</span><h2>Reinspect the output</h2><p>Each supported removal reports verified removed, removal failed, or could not verify. ToolNest does not turn uncertainty into a success claim.</p></article><article><span className="kicker">Limits</span><h2>Not a forensic certificate</h2><p>Complex redaction, hidden content, encrypted files, proprietary annotations, image payload metadata, and unsupported PDF features can require specialist review.</p></article></div><div className="faq-section"><span className="kicker">Helpful answers</span><h2>Document privacy FAQs</h2><div>{faqs.map(({ question, answer }) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></div></div></section>
     <RelatedTools currentHref="/tools/document-privacy" />
   </>;

@@ -91,9 +91,10 @@ export default function ImageResizerPage() {
       <ToolPageShell
         trust={
           <TrustStrip
-            title="Resize on your device"
-            description="Your image is processed locally without an upload or server queue."
-            items={["Aspect ratio lock", "Up to 20 MB", "JPG, PNG, and WebP"]}
+            label="Local processing"
+            title="Processed on this device"
+            description="Your image is resized in this browser."
+            items={["File not uploaded", "Source file stays unchanged", "JPG, PNG, and WebP"]}
           />
         }
       >

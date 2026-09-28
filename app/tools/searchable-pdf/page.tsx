@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { SearchablePdf } from "@/components/searchable-pdf";
 import { PageHeader } from "@/components/ui/page-header";
+import { ToolPageShell } from "@/components/ui/tool-page-shell";
+import { TrustStrip } from "@/components/ui/trust-strip";
 import { RelatedTools } from "@/components/related-tools";
 import { siteConfig } from "@/lib/site";
 
@@ -17,6 +19,17 @@ const faqs = [
 export default function SearchablePdfPage() {
   const structuredData = { "@context": "https://schema.org", "@graph": [{ "@type": "SoftwareApplication", name: "Searchable OCR PDF", applicationCategory: "MultimediaApplication", operatingSystem: "Any with a modern web browser", url: `${siteConfig.url}/tools/searchable-pdf`, description, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } }, { "@type": "FAQPage", mainEntity: faqs.map(({ question, answer }) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) }] };
   return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} /><PageHeader title="Searchable OCR PDF" description="Make scanned and image-only PDF pages searchable with an invisible English text layer, entirely in your browser." eyebrow="PDF tool" accent="coral" icon="OCR" />
-    <section className="tool-page-section"><div className="container tool-page-grid"><SearchablePdf /><aside className="tool-side-note"><span className="kicker">Private by design</span><h2>Search scans without changing their look</h2><p>The tool preserves each original page and adds selectable text only where a usable text layer is missing.</p><ul><li>English OCR on your device</li><li>Mixed text and scanned PDFs</li><li>Original vectors and images retained</li><li>No server upload or account</li></ul></aside></div></section>
+    <ToolPageShell
+      trust={
+        <TrustStrip
+          label="Local OCR"
+          title="Processed on this device"
+          description="The original page stays in place while scanned regions receive searchable text."
+          items={["File not uploaded", "OCR language data may be downloaded", "Native text pages are preserved"]}
+        />
+      }
+    >
+      <SearchablePdf />
+    </ToolPageShell>
     <section className="section section-tint tool-content"><div className="container"><div className="tool-copy-grid"><article><span className="kicker">What it does</span><h2>Add search without flattening pages</h2><p>Scanned pages receive an invisible text layer aligned to recognized text. The visible page remains the original PDF content.</p></article><article><span className="kicker">How to use it</span><h2>Select, process, download</h2><ol><li>Select one PDF.</li><li>Choose Make PDF searchable.</li><li>Wait while image-only pages are recognized.</li><li>Download and search the completed PDF.</li></ol></article><article><span className="kicker">Mixed documents</span><h2>OCR only where needed</h2><p>Pages with usable selectable text are left untouched. OCR starts lazily for scanned pages and its workers are reused for the document.</p></article><article><span className="kicker">Accuracy</span><h2>Clean English scans work best</h2><p>Faint text, handwriting, unusual fonts, perspective distortion, and complex graphics can reduce recognition quality or alignment.</p></article></div><div className="faq-section"><span className="kicker">Helpful answers</span><h2>Searchable PDF FAQs</h2><div>{faqs.map(({ question, answer }) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></div></div></section><RelatedTools currentHref="/tools/searchable-pdf" /></>;
 }
