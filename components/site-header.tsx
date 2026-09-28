@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { categories } from "@/lib/site";
 import { BrowseAllMenu } from "@/components/ui/browse-all-menu";
 import { SearchInput } from "@/components/ui/search-input";
@@ -11,6 +14,8 @@ const navItems = [
 ];
 
 export function SiteHeader() {
+  const pathname = usePathname();
+
   return (
     <header className="site-header">
       <div className="container-app nav-shell">
@@ -19,7 +24,7 @@ export function SiteHeader() {
           <span>Tool<span>Nest</span></span>
         </Link>
 
-        <div className="header-search"><SearchInput /></div>
+        {pathname !== "/" && <div className="header-search"><SearchInput /></div>}
 
         <nav className="desktop-nav" aria-label="Main navigation">
           {navItems.slice(0, 2).map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}

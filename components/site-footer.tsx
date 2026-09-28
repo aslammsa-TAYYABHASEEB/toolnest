@@ -11,7 +11,7 @@ export function SiteFooter() {
             <span>Tool<span>Nest</span></span>
           </Link>
           <p>{siteConfig.description}</p>
-          <div className="footer-status"><span aria-hidden="true" /> Source files and text stay on this device</div>
+          <p className="footer-note">Your content is handled in the browser.</p>
         </div>
         <div>
           <h2>Tools</h2>
@@ -27,7 +27,7 @@ export function SiteFooter() {
       </div>
       <div className="container-app footer-bottom">
         <p>© {new Date().getFullYear()} ToolNest. All rights reserved.</p>
-        <p>Processing and evidence claims are scoped to each tool.</p>
+        <p>Tool-specific network details are shown where relevant.</p>
       </div>
     </footer>
   );

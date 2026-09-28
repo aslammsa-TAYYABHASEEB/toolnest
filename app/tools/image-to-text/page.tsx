@@ -35,9 +35,9 @@ export default function ImageToTextPage() {
       trust={
         <TrustStrip
           label="Local OCR"
-          title="Processed on this device"
-          description="Text extraction runs in your browser and the image content stays local."
-          items={["File not uploaded", "OCR language data may be downloaded", "Review important wording"]}
+          title="File not uploaded"
+          description="OCR language data may be downloaded when recognition starts."
+          items={["Text extraction runs in your browser", "Review important wording"]}
         />
       }
     >

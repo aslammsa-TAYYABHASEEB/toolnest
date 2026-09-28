@@ -23,9 +23,9 @@ export default function SearchablePdfPage() {
       trust={
         <TrustStrip
           label="Local OCR"
-          title="Processed on this device"
-          description="The original page stays in place while scanned regions receive searchable text."
-          items={["File not uploaded", "OCR language data may be downloaded", "Native text pages are preserved"]}
+          title="File not uploaded"
+          description="OCR language data may be downloaded when a scanned page needs recognition."
+          items={["Native text pages are preserved", "Scanned pages receive searchable text"]}
         />
       }
     >

@@ -35,8 +35,7 @@ export default function HomePage() {
       <section className="section" id="popular-tools">
         <div className="container-app">
           <div className="section-heading">
-            <div><h2>Useful work, ready to start</h2></div>
-            <p>Featured workflows show the evidence or processing detail that makes them distinct.</p>
+            <div><h2>Popular tools</h2></div>
           </div>
           <div className="featured-tool-grid">
             {featuredTools.map(({ tool, evidence }) => <ToolCard key={tool.name} tool={tool} variant="featured" evidence={evidence} />)}

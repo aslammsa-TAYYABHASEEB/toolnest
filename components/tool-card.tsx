@@ -24,9 +24,6 @@ export function ToolCard({ tool, variant = "standard", evidence }: ToolCardProps
       <h3>{tool.name}</h3>
       <p>{tool.description}</p>
       {evidence && <span className="tool-card-evidence">{evidence}</span>}
-      <span className="tool-card-cta">
-        {tool.available ? "Open tool" : "View category"}
-      </span>
     </Link>
   );
 }

@@ -24,9 +24,9 @@ export default function PdfToExcelPage() {
       trust={
         <TrustStrip
           label="Processing and evidence"
-          title="Processed on this device"
-          description="ToolNest reads tables and builds spreadsheet files in your browser."
-          items={["File not uploaded", "Source Review", "Automatic checks", "OCR language data may download when OCR is needed"]}
+          title="File not uploaded"
+          description="Source Review and Automatic checks stay linked to the extracted tables."
+          items={["Source Review", "Automatic checks", "OCR language data may download when OCR is needed"]}
         />
       }
     >

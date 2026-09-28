@@ -12,9 +12,9 @@ type ToolPageShellProps = {
 export function ToolPageShell({ children, trust, width = "standard", className }: ToolPageShellProps) {
   return (
     <section className={cn("tool-page-section", className)}>
-      <div className={cn("tool-page-shell", width === "wide" ? "container-workspace" : "container-app")}>
-        <div className="tool-page-workspace">{children}</div>
+      <div className={cn("tool-page-shell", Boolean(trust) && "tool-page-shell-has-trust", width === "wide" ? "container-workspace" : "container-app")}>
         {trust}
+        <div className="tool-page-workspace">{children}</div>
       </div>
     </section>
   );

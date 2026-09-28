@@ -26,9 +26,9 @@ export default function DocumentPrivacyPage() {
       trust={
         <TrustStrip
           label="Inspection and verification"
-          title="Processed on this device"
+          title="File not uploaded"
           description="Inspect first, remove selected supported traces, then recheck the new copy."
-          items={["File not uploaded", "Source file stays unchanged", "Verified supported removals", "Uncertainty remains visible"]}
+          items={["Source file stays unchanged", "Supported removals are verified after processing", "Uncertainty remains visible"]}
         />
       }
     >
