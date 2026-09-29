@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Tool } from "@/lib/site";
 import { Badge } from "@/components/ui/badge";
+import { ToolIcon } from "@/components/icons/tool-icon";
 
 type ToolCardProps = {
   tool: Tool;
@@ -18,7 +19,7 @@ export function ToolCard({ tool, variant = "standard", evidence }: ToolCardProps
       aria-label={tool.available ? `Open ${tool.name}` : `View ${tool.name} category`}
     >
       <div className="tool-card-top">
-        <span className="tool-icon" aria-hidden="true">{tool.icon}</span>
+        <span className="tool-icon" aria-hidden="true"><ToolIcon icon={tool.icon} size={variant === "compact" ? 22 : 24} /></span>
         {!tool.available && <Badge>Coming soon</Badge>}
       </div>
       <h3>{tool.name}</h3>

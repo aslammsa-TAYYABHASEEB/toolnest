@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getRelatedTools } from "@/lib/site";
+import { ToolIcon } from "@/components/icons/tool-icon";
 
 export function RelatedTools({ currentHref }: { currentHref: string }) {
   const relatedTools = getRelatedTools(currentHref);
@@ -17,7 +18,7 @@ export function RelatedTools({ currentHref }: { currentHref: string }) {
         <div className="related-tools-list">
           {relatedTools.map((tool) => (
             <Link key={tool.href} href={tool.href!}>
-              <span className="tool-icon" aria-hidden="true">{tool.icon}</span>
+              <span className="tool-icon" aria-hidden="true"><ToolIcon icon={tool.icon} size={22} /></span>
               <span>
                 <strong>{tool.name}</strong>
                 <small>{tool.description}</small>

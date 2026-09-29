@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ToolCard } from "@/components/tool-card";
 import { PageHeader } from "@/components/ui/page-header";
+import { CategoryIcon } from "@/components/icons/tool-icon";
 import { categories, getCategory, getToolsByCategory, siteConfig } from "@/lib/site";
 
 type PageProps = { params: Promise<{ slug: string }> };
@@ -64,13 +65,13 @@ export default async function CategoryPage({ params }: PageProps) {
 
   return (
     <>
-      <PageHeader title={category.name} description={category.description} eyebrow="Tool category" accent={category.accent} icon={category.icon} />
+      <PageHeader title={category.name} description={category.description} eyebrow="Tool category" accent={category.accent} icon={<CategoryIcon icon={category.icon} size={28} />} />
       <section className="section category-page">
         <div className="container-app">
           <div className="section-heading compact"><div><h2>{category.shortName} tools</h2></div><p>{availableTools.length} free tools ready to use.</p></div>
           <div className="tool-grid">{availableTools.map((tool) => <ToolCard key={tool.name} tool={tool} />)}</div>
           <aside className="category-summary">
-            <span className="category-icon" aria-hidden="true">{category.icon}</span>
+            <span className="category-icon" aria-hidden="true"><CategoryIcon icon={category.icon} size={26} /></span>
             <div><h2>{category.privateHeading}</h2><p>{category.availableDescription}</p></div>
           </aside>
         </div>

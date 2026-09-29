@@ -7,6 +7,7 @@ import { BrowseAllMenu } from "@/components/ui/browse-all-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BrandLogo } from "@/components/brand-logo";
+import { CategoryIcon } from "@/components/icons/tool-icon";
 
 const navItems = [
   { href: "/", label: "Home" },
@@ -42,7 +43,7 @@ export function SiteHeader() {
                 {navItems.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
                 <span className="mobile-nav-label">Categories</span>
                 {categories.map((category) => (
-                  <Link key={category.slug} href={`/categories/${category.slug}`}><span className={`mini-icon ${category.accent}`}>{category.icon}</span>{category.name}</Link>
+                  <Link key={category.slug} href={`/categories/${category.slug}`}><span className={`mini-icon ${category.accent}`} aria-hidden="true"><CategoryIcon icon={category.icon} size={16} /></span>{category.name}</Link>
                 ))}
               </nav>
             </div>

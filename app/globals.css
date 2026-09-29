@@ -142,6 +142,7 @@ html[data-theme="dark"] .brand-logo { --brand-logo-ink: #ffffff; --brand-logo-ac
 .mobile-menu-panel nav > a:hover { background: var(--color-surface-brand); color: var(--color-brand-700); }
 .mobile-nav-label { padding: var(--space-4) .7rem var(--space-1); color: var(--color-text-subtle); font-size: .65rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
 .mini-icon { width: 1.8rem; height: 1.8rem; display: grid; place-items: center; border-radius: .45rem; background: var(--color-brand-100); color: var(--color-brand-700); font-size: .55rem; font-weight: 900; }
+.tool-icon svg, .category-icon svg, .page-header-icon svg, .mini-icon svg { display: block; flex: 0 0 auto; }
 
 /* Homepage */
 .hero { border-bottom: 1px solid var(--color-border); background: var(--color-surface); }

@@ -1,3 +1,5 @@
+import type { CategoryIconKey, ToolIconKey } from "@/lib/icon-keys";
+
 const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
 const siteUrl = configuredSiteUrl
   ? new URL(configuredSiteUrl).toString().replace(/\/$/, "")
@@ -18,7 +20,7 @@ export type Tool = {
   name: string;
   description: string;
   category: string;
-  icon: string;
+  icon: ToolIconKey;
   popular?: boolean;
   available?: boolean;
   href?: string;
@@ -33,7 +35,7 @@ export type Category = {
   description: string;
   privateHeading: string;
   availableDescription: string;
-  icon: string;
+  icon: CategoryIconKey;
   accent: string;
 };
 
@@ -45,7 +47,7 @@ export const categories: Category[] = [
     description: "Organize, convert, and prepare PDF documents with ease.",
     privateHeading: "Work with PDFs privately",
     availableDescription: "Merge, split, rotate, compress, watermark, number, and convert PDF files directly in your browser. ToolNest keeps supported document processing on your device.",
-    icon: "PDF",
+    icon: "category-pdf",
     accent: "coral",
   },
   {
@@ -55,7 +57,7 @@ export const categories: Category[] = [
     description: "Resize, compress, and convert your everyday images.",
     privateHeading: "Work with images privately",
     availableDescription: "Image Resizer, Image Compressor, and Image Converter handle JPG, PNG, and WebP entirely on your device.",
-    icon: "IMG",
+    icon: "category-image",
     accent: "violet",
   },
   {
@@ -65,7 +67,7 @@ export const categories: Category[] = [
     description: "Clean, count, format, and transform written content.",
     privateHeading: "Work with text privately",
     availableDescription: "Count and clean writing, change letter case, format JSON, and create QR codes directly in your browser without sending text to a processing server.",
-    icon: "TXT",
+    icon: "category-text",
     accent: "blue",
   },
   {
@@ -75,37 +77,37 @@ export const categories: Category[] = [
     description: "Quick calculators for work, study, and daily decisions.",
     privateHeading: "Calculate privately",
     availableDescription: "Percentage, age, and unit calculations run instantly in your browser without sending your values anywhere.",
-    icon: "123",
+    icon: "category-calculators",
     accent: "green",
   },
 ];
 
 export const tools: Tool[] = [
-  { name: "PDF Sanitizer & Privacy Checker", description: "Check PDF privacy traces, remove selected supported items, and verify a private sanitized copy.", category: "pdf-tools", icon: "PDF", available: true, href: "/tools/document-privacy", keywords: ["document privacy inspector", "pdf privacy checker", "pdf metadata remover", "pdf sanitizer", "remove pdf attachments", "remove pdf javascript", "remove pdf comments", "remove external links from pdf", "check hidden text pdf", "pdf redaction checker"], relatedHrefs: ["/tools/searchable-pdf", "/tools/organize-pdf", "/tools/pdf-to-word"] },
-  { name: "Searchable OCR PDF", description: "Make scanned PDF pages searchable with private on-device English OCR.", category: "pdf-tools", icon: "OCR", available: true, href: "/tools/searchable-pdf", keywords: ["searchable pdf", "ocr pdf", "make pdf searchable", "scanned pdf to searchable pdf", "add text layer to pdf", "search scanned pdf"], relatedHrefs: ["/tools/pdf-to-word", "/tools/pdf-to-excel", "/tools/organize-pdf"] },
-  { name: "PDF to Excel", description: "Extract tables from text or scanned PDFs into editable Excel and CSV files privately.", category: "pdf-tools", icon: "XLS", available: true, href: "/tools/pdf-to-excel", keywords: ["pdf to excel", "pdf to xlsx", "extract table from pdf", "pdf table extractor", "pdf to csv", "scanned pdf to excel", "convert pdf table to excel"], relatedHrefs: ["/tools/pdf-to-word", "/tools/organize-pdf", "/tools/pdf-to-jpg"] },
-  { name: "Image to Text", description: "Extract editable English text from images with private on-device OCR.", category: "image-tools", icon: "Aa", available: true, href: "/tools/image-to-text", keywords: ["image to text", "jpg to text", "jpeg to text", "png to text", "photo to text", "picture to text", "ocr image", "extract text from image", "screenshot to text"], relatedHrefs: ["/tools/image-converter", "/tools/image-resizer", "/tools/pdf-to-word"] },
-  { name: "Organize PDF", description: "Visually reorder, delete, rotate, duplicate, extract, and insert PDF pages privately.", category: "pdf-tools", icon: "▦", available: true, href: "/tools/organize-pdf", keywords: ["organize pdf", "reorder pdf", "delete pdf pages", "move pdf pages", "insert pdf pages", "duplicate pdf page", "extract pdf pages"], relatedHrefs: ["/tools/pdf-merge", "/tools/pdf-split", "/tools/pdf-rotate"] },
-  { name: "PDF Merge", description: "Combine multiple PDF files privately in the order you choose.", category: "pdf-tools", icon: "M", popular: true, available: true, href: "/tools/pdf-merge", keywords: ["merge pdf", "combine pdf files", "join pdf"], relatedHrefs: ["/tools/pdf-split", "/tools/pdf-compress", "/tools/pdf-page-numbers"] },
-  { name: "PDF Split", description: "Extract pages or divide a PDF into private browser downloads.", category: "pdf-tools", icon: "S", popular: true, available: true, href: "/tools/pdf-split", keywords: ["split pdf", "extract pdf pages", "separate pdf pages"], relatedHrefs: ["/tools/pdf-merge", "/tools/pdf-rotate", "/tools/pdf-page-numbers"] },
-  { name: "JPG to PDF", description: "Turn ordered JPG, PNG, and WebP images into one private PDF.", category: "pdf-tools", icon: "J", popular: true, available: true, href: "/tools/jpg-to-pdf", keywords: ["jpg to pdf", "image to pdf", "png to pdf"], relatedHrefs: ["/tools/image-converter", "/tools/pdf-merge", "/tools/pdf-compress"] },
-  { name: "PDF to JPG", description: "Render PDF pages as private JPG or PNG image downloads.", category: "pdf-tools", icon: "I", popular: true, available: true, href: "/tools/pdf-to-jpg", keywords: ["pdf to jpg", "pdf to image", "convert pdf to png"], relatedHrefs: ["/tools/image-compressor", "/tools/image-converter", "/tools/jpg-to-pdf"] },
-  { name: "PDF Rotate", description: "Rotate all or selected PDF pages without flattening their content.", category: "pdf-tools", icon: "R", popular: true, available: true, href: "/tools/pdf-rotate", keywords: ["rotate pdf", "turn pdf pages", "fix pdf orientation"], relatedHrefs: ["/tools/pdf-split", "/tools/pdf-merge", "/tools/pdf-page-numbers"] },
-  { name: "PDF Watermark", description: "Add text, image, or logo watermarks to PDF pages privately in your browser.", category: "pdf-tools", icon: "WM", available: true, href: "/tools/pdf-watermark", keywords: ["pdf watermark", "add watermark to pdf", "logo watermark pdf", "image watermark pdf"], relatedHrefs: ["/tools/pdf-page-numbers", "/tools/pdf-split", "/tools/pdf-rotate"] },
-  { name: "PDF Page Numbers", description: "Add customizable page numbers to all or selected PDF pages privately in your browser.", category: "pdf-tools", icon: "#", available: true, href: "/tools/pdf-page-numbers", keywords: ["page numbers", "pdf page numbers", "number pdf", "add page numbers to pdf", "pdf page numbering", "page 1 of 10 pdf"], relatedHrefs: ["/tools/pdf-watermark", "/tools/pdf-split", "/tools/pdf-rotate"] },
-  { name: "Compress PDF", description: "Reduce PDF file size while keeping it readable.", category: "pdf-tools", icon: "C", popular: true, available: true, href: "/tools/pdf-compress", keywords: ["compress pdf", "reduce pdf size", "make pdf smaller"], relatedHrefs: ["/tools/pdf-merge", "/tools/pdf-split", "/tools/pdf-to-word"] },
-  { name: "PDF to Word", description: "Convert PDF text to a downloadable Word document privately in your browser.", category: "pdf-tools", icon: "W", available: true, href: "/tools/pdf-to-word", keywords: ["pdf to word", "pdf to docx", "convert pdf to editable word"], relatedHrefs: ["/tools/pdf-to-jpg", "/tools/pdf-split", "/tools/pdf-compress"] },
-  { name: "Image Resizer", description: "Resize JPG, PNG, and WebP images privately by pixels or percentage.", category: "image-tools", icon: "R", popular: true, available: true, href: "/tools/image-resizer", keywords: ["resize image", "change image dimensions", "resize jpg png webp"], relatedHrefs: ["/tools/image-compressor", "/tools/image-converter", "/tools/jpg-to-pdf"] },
-  { name: "Image Compressor", description: "Reduce JPG, PNG, and WebP file sizes privately in your browser.", category: "image-tools", icon: "C", popular: true, available: true, href: "/tools/image-compressor", keywords: ["compress image online", "reduce image size", "compress jpg png webp"], relatedHrefs: ["/tools/image-resizer", "/tools/image-converter", "/tools/pdf-to-jpg"] },
-  { name: "Image Converter", description: "Convert JPG, PNG, and WebP images privately in your browser.", category: "image-tools", icon: "↻", available: true, href: "/tools/image-converter", keywords: ["image converter", "convert jpg png webp", "change image format"], relatedHrefs: ["/tools/image-resizer", "/tools/image-compressor", "/tools/jpg-to-pdf"] },
-  { name: "Word Counter", description: "Count words, characters, sentences, and reading time.", category: "text-tools", icon: "W", popular: true, available: true, href: "/tools/word-counter", keywords: ["word counter", "character counter", "count words online"], relatedHrefs: ["/tools/case-converter", "/tools/remove-extra-spaces", "/tools/json-formatter"] },
-  { name: "QR Code Generator", description: "Create customizable QR codes for text, links, Wi-Fi, messages, and contacts.", category: "text-tools", icon: "QR", popular: true, available: true, href: "/tools/qr-code-generator", keywords: ["qr code generator", "create qr code", "wifi qr code"], relatedHrefs: ["/tools/json-formatter", "/tools/word-counter"] },
-  { name: "JSON Formatter & Validator", description: "Format, minify, and validate JSON privately in your browser.", category: "text-tools", icon: "{}", popular: true, available: true, href: "/tools/json-formatter", keywords: ["json formatter", "json validator", "beautify json"], relatedHrefs: ["/tools/case-converter", "/tools/remove-extra-spaces", "/tools/word-counter"] },
-  { name: "Case Converter", description: "Switch text between uppercase and lowercase styles.", category: "text-tools", icon: "Aa", available: true, href: "/tools/case-converter", keywords: ["case converter", "uppercase lowercase converter", "title case converter"], relatedHrefs: ["/tools/remove-extra-spaces", "/tools/word-counter", "/tools/json-formatter"] },
-  { name: "Remove Extra Spaces", description: "Clean repeated spaces and untidy line breaks.", category: "text-tools", icon: "¶", available: true, href: "/tools/remove-extra-spaces", keywords: ["remove extra spaces", "clean whitespace", "remove blank lines"], relatedHrefs: ["/tools/case-converter", "/tools/word-counter", "/tools/json-formatter"] },
-  { name: "Percentage Calculator", description: "Solve common percentage questions quickly.", category: "calculators", icon: "%", popular: true, available: true, href: "/tools/percentage-calculator", keywords: ["percentage calculator", "percent change calculator", "calculate percentage"], relatedHrefs: ["/tools/age-calculator", "/tools/unit-converter"] },
-  { name: "Age Calculator", description: "Calculate exact age in years, months, and days from date of birth.", category: "calculators", icon: "A", popular: true, available: true, href: "/tools/age-calculator", keywords: ["age calculator", "calculate exact age", "date of birth calculator"], relatedHrefs: ["/tools/percentage-calculator", "/tools/unit-converter"] },
-  { name: "Unit Converter", description: "Convert common length, weight, and temperature units.", category: "calculators", icon: "⇄", popular: true, available: true, href: "/tools/unit-converter", keywords: ["unit converter", "metric imperial converter", "length weight temperature converter"], relatedHrefs: ["/tools/percentage-calculator", "/tools/age-calculator"] },
+  { name: "PDF Sanitizer & Privacy Checker", description: "Check PDF privacy traces, remove selected supported items, and verify a private sanitized copy.", category: "pdf-tools", icon: "document-privacy", available: true, href: "/tools/document-privacy", keywords: ["document privacy inspector", "pdf privacy checker", "pdf metadata remover", "pdf sanitizer", "remove pdf attachments", "remove pdf javascript", "remove pdf comments", "remove external links from pdf", "check hidden text pdf", "pdf redaction checker"], relatedHrefs: ["/tools/searchable-pdf", "/tools/organize-pdf", "/tools/pdf-to-word"] },
+  { name: "Searchable OCR PDF", description: "Make scanned PDF pages searchable with private on-device English OCR.", category: "pdf-tools", icon: "searchable-pdf", available: true, href: "/tools/searchable-pdf", keywords: ["searchable pdf", "ocr pdf", "make pdf searchable", "scanned pdf to searchable pdf", "add text layer to pdf", "search scanned pdf"], relatedHrefs: ["/tools/pdf-to-word", "/tools/pdf-to-excel", "/tools/organize-pdf"] },
+  { name: "PDF to Excel", description: "Extract tables from text or scanned PDFs into editable Excel and CSV files privately.", category: "pdf-tools", icon: "pdf-to-excel", available: true, href: "/tools/pdf-to-excel", keywords: ["pdf to excel", "pdf to xlsx", "extract table from pdf", "pdf table extractor", "pdf to csv", "scanned pdf to excel", "convert pdf table to excel"], relatedHrefs: ["/tools/pdf-to-word", "/tools/organize-pdf", "/tools/pdf-to-jpg"] },
+  { name: "Image to Text", description: "Extract editable English text from images with private on-device OCR.", category: "image-tools", icon: "image-to-text", available: true, href: "/tools/image-to-text", keywords: ["image to text", "jpg to text", "jpeg to text", "png to text", "photo to text", "picture to text", "ocr image", "extract text from image", "screenshot to text"], relatedHrefs: ["/tools/image-converter", "/tools/image-resizer", "/tools/pdf-to-word"] },
+  { name: "Organize PDF", description: "Visually reorder, delete, rotate, duplicate, extract, and insert PDF pages privately.", category: "pdf-tools", icon: "organize-pdf", available: true, href: "/tools/organize-pdf", keywords: ["organize pdf", "reorder pdf", "delete pdf pages", "move pdf pages", "insert pdf pages", "duplicate pdf page", "extract pdf pages"], relatedHrefs: ["/tools/pdf-merge", "/tools/pdf-split", "/tools/pdf-rotate"] },
+  { name: "PDF Merge", description: "Combine multiple PDF files privately in the order you choose.", category: "pdf-tools", icon: "pdf-merge", popular: true, available: true, href: "/tools/pdf-merge", keywords: ["merge pdf", "combine pdf files", "join pdf"], relatedHrefs: ["/tools/pdf-split", "/tools/pdf-compress", "/tools/pdf-page-numbers"] },
+  { name: "PDF Split", description: "Extract pages or divide a PDF into private browser downloads.", category: "pdf-tools", icon: "pdf-split", popular: true, available: true, href: "/tools/pdf-split", keywords: ["split pdf", "extract pdf pages", "separate pdf pages"], relatedHrefs: ["/tools/pdf-merge", "/tools/pdf-rotate", "/tools/pdf-page-numbers"] },
+  { name: "JPG to PDF", description: "Turn ordered JPG, PNG, and WebP images into one private PDF.", category: "pdf-tools", icon: "jpg-to-pdf", popular: true, available: true, href: "/tools/jpg-to-pdf", keywords: ["jpg to pdf", "image to pdf", "png to pdf"], relatedHrefs: ["/tools/image-converter", "/tools/pdf-merge", "/tools/pdf-compress"] },
+  { name: "PDF to JPG", description: "Render PDF pages as private JPG or PNG image downloads.", category: "pdf-tools", icon: "pdf-to-jpg", popular: true, available: true, href: "/tools/pdf-to-jpg", keywords: ["pdf to jpg", "pdf to image", "convert pdf to png"], relatedHrefs: ["/tools/image-compressor", "/tools/image-converter", "/tools/jpg-to-pdf"] },
+  { name: "PDF Rotate", description: "Rotate all or selected PDF pages without flattening their content.", category: "pdf-tools", icon: "pdf-rotate", popular: true, available: true, href: "/tools/pdf-rotate", keywords: ["rotate pdf", "turn pdf pages", "fix pdf orientation"], relatedHrefs: ["/tools/pdf-split", "/tools/pdf-merge", "/tools/pdf-page-numbers"] },
+  { name: "PDF Watermark", description: "Add text, image, or logo watermarks to PDF pages privately in your browser.", category: "pdf-tools", icon: "pdf-watermark", available: true, href: "/tools/pdf-watermark", keywords: ["pdf watermark", "add watermark to pdf", "logo watermark pdf", "image watermark pdf"], relatedHrefs: ["/tools/pdf-page-numbers", "/tools/pdf-split", "/tools/pdf-rotate"] },
+  { name: "PDF Page Numbers", description: "Add customizable page numbers to all or selected PDF pages privately in your browser.", category: "pdf-tools", icon: "pdf-page-numbers", available: true, href: "/tools/pdf-page-numbers", keywords: ["page numbers", "pdf page numbers", "number pdf", "add page numbers to pdf", "pdf page numbering", "page 1 of 10 pdf"], relatedHrefs: ["/tools/pdf-watermark", "/tools/pdf-split", "/tools/pdf-rotate"] },
+  { name: "Compress PDF", description: "Reduce PDF file size while keeping it readable.", category: "pdf-tools", icon: "pdf-compress", popular: true, available: true, href: "/tools/pdf-compress", keywords: ["compress pdf", "reduce pdf size", "make pdf smaller"], relatedHrefs: ["/tools/pdf-merge", "/tools/pdf-split", "/tools/pdf-to-word"] },
+  { name: "PDF to Word", description: "Convert PDF text to a downloadable Word document privately in your browser.", category: "pdf-tools", icon: "pdf-to-word", available: true, href: "/tools/pdf-to-word", keywords: ["pdf to word", "pdf to docx", "convert pdf to editable word"], relatedHrefs: ["/tools/pdf-to-jpg", "/tools/pdf-split", "/tools/pdf-compress"] },
+  { name: "Image Resizer", description: "Resize JPG, PNG, and WebP images privately by pixels or percentage.", category: "image-tools", icon: "image-resize", popular: true, available: true, href: "/tools/image-resizer", keywords: ["resize image", "change image dimensions", "resize jpg png webp"], relatedHrefs: ["/tools/image-compressor", "/tools/image-converter", "/tools/jpg-to-pdf"] },
+  { name: "Image Compressor", description: "Reduce JPG, PNG, and WebP file sizes privately in your browser.", category: "image-tools", icon: "image-compress", popular: true, available: true, href: "/tools/image-compressor", keywords: ["compress image online", "reduce image size", "compress jpg png webp"], relatedHrefs: ["/tools/image-resizer", "/tools/image-converter", "/tools/pdf-to-jpg"] },
+  { name: "Image Converter", description: "Convert JPG, PNG, and WebP images privately in your browser.", category: "image-tools", icon: "image-convert", available: true, href: "/tools/image-converter", keywords: ["image converter", "convert jpg png webp", "change image format"], relatedHrefs: ["/tools/image-resizer", "/tools/image-compressor", "/tools/jpg-to-pdf"] },
+  { name: "Word Counter", description: "Count words, characters, sentences, and reading time.", category: "text-tools", icon: "word-counter", popular: true, available: true, href: "/tools/word-counter", keywords: ["word counter", "character counter", "count words online"], relatedHrefs: ["/tools/case-converter", "/tools/remove-extra-spaces", "/tools/json-formatter"] },
+  { name: "QR Code Generator", description: "Create customizable QR codes for text, links, Wi-Fi, messages, and contacts.", category: "text-tools", icon: "qr-code", popular: true, available: true, href: "/tools/qr-code-generator", keywords: ["qr code generator", "create qr code", "wifi qr code"], relatedHrefs: ["/tools/json-formatter", "/tools/word-counter"] },
+  { name: "JSON Formatter & Validator", description: "Format, minify, and validate JSON privately in your browser.", category: "text-tools", icon: "json-formatter", popular: true, available: true, href: "/tools/json-formatter", keywords: ["json formatter", "json validator", "beautify json"], relatedHrefs: ["/tools/case-converter", "/tools/remove-extra-spaces", "/tools/word-counter"] },
+  { name: "Case Converter", description: "Switch text between uppercase and lowercase styles.", category: "text-tools", icon: "case-converter", available: true, href: "/tools/case-converter", keywords: ["case converter", "uppercase lowercase converter", "title case converter"], relatedHrefs: ["/tools/remove-extra-spaces", "/tools/word-counter", "/tools/json-formatter"] },
+  { name: "Remove Extra Spaces", description: "Clean repeated spaces and untidy line breaks.", category: "text-tools", icon: "remove-extra-spaces", available: true, href: "/tools/remove-extra-spaces", keywords: ["remove extra spaces", "clean whitespace", "remove blank lines"], relatedHrefs: ["/tools/case-converter", "/tools/word-counter", "/tools/json-formatter"] },
+  { name: "Percentage Calculator", description: "Solve common percentage questions quickly.", category: "calculators", icon: "percentage-calculator", popular: true, available: true, href: "/tools/percentage-calculator", keywords: ["percentage calculator", "percent change calculator", "calculate percentage"], relatedHrefs: ["/tools/age-calculator", "/tools/unit-converter"] },
+  { name: "Age Calculator", description: "Calculate exact age in years, months, and days from date of birth.", category: "calculators", icon: "age-calculator", popular: true, available: true, href: "/tools/age-calculator", keywords: ["age calculator", "calculate exact age", "date of birth calculator"], relatedHrefs: ["/tools/percentage-calculator", "/tools/unit-converter"] },
+  { name: "Unit Converter", description: "Convert common length, weight, and temperature units.", category: "calculators", icon: "unit-converter", popular: true, available: true, href: "/tools/unit-converter", keywords: ["unit converter", "metric imperial converter", "length weight temperature converter"], relatedHrefs: ["/tools/percentage-calculator", "/tools/age-calculator"] },
 ];
 
 export function getCategory(slug: string) {
