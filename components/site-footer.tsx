@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { categories, siteConfig } from "@/lib/site";
+import { BrandLogo } from "@/components/brand-logo";
 
 export function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="container-app footer-grid">
         <div>
-          <Link className="brand footer-brand" href="/">
-            <span className="brand-mark" aria-hidden="true">T</span>
-            <span>Tool<span>Nest</span></span>
+          <Link className="brand footer-brand" href="/" aria-label="ToolNest home">
+            <BrandLogo />
           </Link>
           <p>{siteConfig.description}</p>
           <p className="footer-note">Your content is handled in the browser.</p>

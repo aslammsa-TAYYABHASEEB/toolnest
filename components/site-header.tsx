@@ -6,6 +6,7 @@ import { categories } from "@/lib/site";
 import { BrowseAllMenu } from "@/components/ui/browse-all-menu";
 import { SearchInput } from "@/components/ui/search-input";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BrandLogo } from "@/components/brand-logo";
 
 const navItems = [
   { href: "/", label: "Home" },
@@ -20,8 +21,7 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="container-app nav-shell">
         <Link className="brand" href="/" aria-label="ToolNest home">
-          <span className="brand-mark" aria-hidden="true">T</span>
-          <span>Tool<span>Nest</span></span>
+          <BrandLogo />
         </Link>
 
         {pathname !== "/" && <div className="header-search"><SearchInput /></div>}

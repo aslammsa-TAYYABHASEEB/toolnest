@@ -101,9 +101,13 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 /* Header and navigation */
 .site-header { position: sticky; z-index: 40; top: 0; height: 4rem; border-bottom: 1px solid color-mix(in srgb, var(--color-border) 86%, transparent); background: var(--header-bg); backdrop-filter: blur(16px); }
 .nav-shell { height: 100%; display: flex; align-items: center; gap: var(--space-4); }
-.brand { display: inline-flex; align-items: center; gap: .65rem; flex: 0 0 auto; font-size: 1.1rem; font-weight: 850; letter-spacing: -.035em; }
-.brand > span:last-child > span { color: var(--color-brand-500); }
-.brand-mark { width: 2.25rem; height: 2.25rem; display: grid; place-items: center; border-radius: .7rem .7rem .7rem .25rem; background: var(--color-brand-500); color: var(--color-on-brand); box-shadow: 0 8px 20px color-mix(in srgb, var(--color-brand-500) 25%, transparent); font-size: 1rem; }
+.brand { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.brand-logo { --brand-logo-ink: #0f172a; --brand-logo-accent: #5b4cf0; display: inline-flex; align-items: center; gap: .55rem; }
+.brand-logo-mark { width: 1.5rem; height: 1.5rem; display: block; flex: 0 0 auto; fill: var(--brand-logo-accent); }
+.brand-logo-wordmark { width: 6.15rem; height: 1.5rem; display: block; flex: 0 0 auto; }
+.brand-logo-tool { fill: var(--brand-logo-ink); }
+.brand-logo-nest { fill: var(--brand-logo-accent); }
+html[data-theme="dark"] .brand-logo { --brand-logo-ink: #ffffff; --brand-logo-accent: #887cff; }
 .header-search { display: none; width: min(24rem, 30vw); margin-left: auto; }
 .desktop-nav { display: none; align-items: center; gap: var(--space-6); margin-left: auto; color: var(--color-text-muted); font-size: var(--text-sm); font-weight: 700; }
 .desktop-nav > a:hover, .nav-dropdown-trigger:hover { color: var(--color-brand-500); }
@@ -873,6 +877,9 @@ button:disabled, .ui-button[aria-disabled="true"] { cursor: not-allowed; opacity
 .site-footer { padding-top: var(--space-12); background: var(--footer-bg); color: #f7f9fc; }
 .footer-grid { display: grid; gap: var(--space-10); padding-bottom: var(--space-10); }
 .footer-brand { margin-bottom: var(--space-4); }
+.footer-brand .brand-logo { --brand-logo-ink: #ffffff; --brand-logo-accent: #887cff; }
+.footer-brand .brand-logo-mark { width: 1.75rem; height: 1.75rem; }
+.footer-brand .brand-logo-wordmark { width: 7.15rem; height: 1.75rem; }
 .footer-grid > div:first-child > p { max-width: 21rem; margin: 0; color: var(--footer-text); font-size: var(--text-sm); }
 .footer-grid > div:first-child > .footer-note { margin-top: var(--space-5); font-size: var(--text-xs); }
 .footer-grid h2 { margin: 0 0 var(--space-3); color: #f7f9fc; font-size: var(--text-sm); }

@@ -1,0 +1,27 @@
+type BrandLogoProps = {
+  className?: string;
+};
+
+export function BrandLogo({ className }: BrandLogoProps) {
+  return (
+    <span className={["brand-logo", className].filter(Boolean).join(" ")} aria-hidden="true">
+      <svg className="brand-logo-mark" viewBox="0 0 64 64" focusable="false">
+        <path d="M10 9h25v10h-9v36H16V19h-6V9Zm23 10h8l7 15V19h8v36h-8l-7-15v15h-8V19Z" />
+      </svg>
+      <svg className="brand-logo-wordmark" viewBox="0 0 262 64" focusable="false">
+        <g className="brand-logo-tool">
+          <path d="M2 12h32v8H22v32h-8V20H2z" />
+          <path fillRule="evenodd" d="M52 20a16 16 0 1 1 0 32 16 16 0 0 1 0-32Zm0 7a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />
+          <path fillRule="evenodd" d="M85 20a16 16 0 1 1 0 32 16 16 0 0 1 0-32Zm0 7a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />
+          <path d="M104 10h8v31c0 3 1.5 4 4 4h3v7h-5c-7 0-10-3.5-10-10V10Z" />
+        </g>
+        <g className="brand-logo-nest">
+          <path d="M128 12h8l16 25V12h8v40h-8l-16-25v25h-8V12Z" />
+          <path fillRule="evenodd" d="M182 19c10 0 15 7 15 18v2h-23c1 4 4 7 9 7 4 0 7-1 10-3v7c-3 2-7 3-11 3-10 0-16-7-16-17 0-10 7-17 16-17Zm0 7c-4 0-7 3-8 7h15c-1-4-3-7-7-7Z" />
+          <path d="M226 22v7c-4-2-8-3-12-3-3 0-5 1-5 3 0 2 2 2 7 3 8 1 12 4 12 10 0 7-6 11-15 11-5 0-10-1-14-4v-7c5 3 9 4 14 4 4 0 6-1 6-3 0-2-2-3-7-4-8-1-11-4-11-10 0-7 6-11 15-11 5 0 9 1 13 3Z" />
+          <path d="M241 12h8v9h9v7h-9v13c0 3 1 4 4 4 2 0 3 0 5-1v7c-2 1-5 2-8 2-6 0-9-4-9-11V28h-6v-7h6v-9Z" />
+        </g>
+      </svg>
+    </span>
+  );
+}

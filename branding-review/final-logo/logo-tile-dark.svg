@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title">
+  <title id="title">ToolNest symbol on dark tile</title>
+  <rect width="80" height="80" rx="18" fill="#0F172A"/>
+  <g transform="translate(8 8)"><path fill="#FFFFFF" d="M10 9h25v10h-9v36H16V19h-6V9Zm23 10h8l7 15V19h8v36h-8l-7-15v15h-8V19Z"/></g>
+</svg>
