@@ -15,6 +15,8 @@
     "test:pdf-to-excel-automatic-checks": "node scripts/test-pdf-to-excel-automatic-checks.cjs",
     "test:pdf-table-verification": "node scripts/test-pdf-table-verification.cjs",
     "test:pdf-renderer-security": "node scripts/test-pdf-renderer-security.cjs",
+    "test:pdf-preflight": "node scripts/test-pdf-preflight.cjs && node scripts/test-transparent-pdf-preflight.cjs && node scripts/test-transparent-pdf-preflight-compression.cjs",
+    "test:pdf-preflight-browser": "node scripts/test-pdf-preflight-browser.cjs",
     "test:csp": "node scripts/test-csp-config.cjs",
     "test:csp-browser": "node scripts/test-csp-browser.cjs",
     "test:privacy-inspector": "node scripts/test-privacy-inspector.cjs",
