@@ -25,29 +25,6 @@ export const metadata: Metadata = {
   },
 };
 
-const faqs = [
-  {
-    question: "How is the age calculated?",
-    answer:
-      "The calculator finds the exact difference between the birth date and the target date in calendar years, months, and days — accounting for varying month lengths and leap years. For someone born on February 29, non-leap years treat February 28 as the anniversary.",
-  },
-  {
-    question: "What if I leave the 'as of' date empty?",
-    answer:
-      "The 'as of' date defaults to today's date, so you can enter just a birth date and immediately see the current age.",
-  },
-  {
-    question: "Are my dates sent to a server?",
-    answer:
-      "No. All calculations are performed locally in your web browser. Your dates never leave your device.",
-  },
-  {
-    question: "Can I calculate age between any two dates?",
-    answer:
-      "Yes. Enter any birth date and any 'as of' date (today or earlier). The birth date must be on or before the 'as of' date.",
-  },
-];
-
 export default function AgeCalculatorPage() {
   const structuredData = {
     "@context": "https://schema.org",
@@ -60,14 +37,6 @@ export default function AgeCalculatorPage() {
         url: `${siteConfig.url}/tools/age-calculator`,
         description,
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      },
-      {
-        "@type": "FAQPage",
-        mainEntity: faqs.map(({ question, answer }) => ({
-          "@type": "Question",
-          name: question,
-          acceptedAnswer: { "@type": "Answer", text: answer },
-        })),
       },
     ],
   };

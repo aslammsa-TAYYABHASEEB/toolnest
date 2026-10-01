@@ -17,6 +17,7 @@
     "test:pdf-renderer-security": "node scripts/test-pdf-renderer-security.cjs",
     "test:pdf-preflight": "node scripts/test-pdf-preflight.cjs && node scripts/test-transparent-pdf-preflight.cjs && node scripts/test-transparent-pdf-preflight-compression.cjs",
     "test:pdf-preflight-browser": "node scripts/test-pdf-preflight-browser.cjs",
+    "test:seo-integrity": "node scripts/test-seo-integrity.cjs",
     "test:csp": "node scripts/test-csp-config.cjs",
     "test:csp-browser": "node scripts/test-csp-browser.cjs",
     "test:privacy-inspector": "node scripts/test-privacy-inspector.cjs",

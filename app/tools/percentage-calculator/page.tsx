@@ -27,29 +27,6 @@ export const metadata: Metadata = {
   },
 };
 
-const faqs = [
-  {
-    question: "Are my calculations sent to a server?",
-    answer:
-      "No. The Percentage Calculator performs all computations locally in your web browser. Your numbers never leave your device.",
-  },
-  {
-    question: "Can I calculate percentage increase and decrease?",
-    answer:
-      "Yes. Enter a starting value and ending value to see the percent increase or decrease, with the direction clearly indicated.",
-  },
-  {
-    question: "What if I divide by zero?",
-    answer:
-      "The calculator handles division by zero gracefully. If you're calculating 'X is what percent of Y' with Y = 0, the result will indicate the operation is undefined.",
-  },
-  {
-    question: "Are my numbers stored or logged?",
-    answer:
-      "No. All calculations are performed entirely within your browser. No data is collected, stored, or transmitted.",
-  },
-];
-
 export default function PercentageCalculatorPage() {
   const structuredData = {
     "@context": "https://schema.org",
@@ -62,14 +39,6 @@ export default function PercentageCalculatorPage() {
         url: `${siteConfig.url}/tools/percentage-calculator`,
         description,
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      },
-      {
-        "@type": "FAQPage",
-        mainEntity: faqs.map(({ question, answer }) => ({
-          "@type": "Question",
-          name: question,
-          acceptedAnswer: { "@type": "Answer", text: answer },
-        })),
       },
     ],
   };

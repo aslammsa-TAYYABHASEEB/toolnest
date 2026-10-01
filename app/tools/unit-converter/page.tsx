@@ -25,29 +25,6 @@ export const metadata: Metadata = {
   },
 };
 
-const faqs = [
-  {
-    question: "What unit categories are supported?",
-    answer:
-      "The Unit Converter supports three categories: Length (millimeters, centimeters, meters, kilometers, inches, feet, yards, miles), Weight (milligrams, grams, kilograms, ounces, pounds, stone, metric tons), and Temperature (Celsius, Fahrenheit, Kelvin).",
-  },
-  {
-    question: "How accurate are the conversions?",
-    answer:
-      "Conversions use internationally standard conversion factors (e.g. 1 inch = 2.54 cm exactly). Results are formatted to a sensible number of decimal places to avoid clutter while preserving meaningful precision.",
-  },
-  {
-    question: "Are my values sent to a server?",
-    answer:
-      "No. All conversions are performed locally in your web browser. Your values never leave your device.",
-  },
-  {
-    question: "Can I swap the from and to units?",
-    answer:
-      "Yes. Use the swap button (⇄) between the two fields to quickly reverse the conversion direction.",
-  },
-];
-
 export default function UnitConverterPage() {
   const structuredData = {
     "@context": "https://schema.org",
@@ -60,14 +37,6 @@ export default function UnitConverterPage() {
         url: `${siteConfig.url}/tools/unit-converter`,
         description,
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      },
-      {
-        "@type": "FAQPage",
-        mainEntity: faqs.map(({ question, answer }) => ({
-          "@type": "Question",
-          name: question,
-          acceptedAnswer: { "@type": "Answer", text: answer },
-        })),
       },
     ],
   };
