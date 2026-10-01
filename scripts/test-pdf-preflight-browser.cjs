@@ -25,17 +25,30 @@ async function fixture(){
       assert.equal(await page.locator('body').evaluate(element=>element.scrollWidth<=element.clientWidth+1),true,scenario.name+' horizontal overflow');
       assert.equal(await page.getByText('What must this PDF meet?').isVisible(),true);
       assert.equal(await page.getByText('Select once').isVisible(),true);
+      for(const copy of ['1 - Requirements','2 - Your PDF','Optional - MB','One PDF - 100 MB maximum'])assert.equal(await page.getByText(copy,{exact:true}).isVisible(),true,'missing exact copy: '+copy);
       if(scenario.name==='desktop light'){
         await page.locator('#pdf-preflight-file').setInputFiles({name:'browser-preflight.pdf',mimeType:'application/pdf',buffer:bytes});
+        await page.evaluate(()=>{
+          window.preflightCopyObserved=[];
+          const record=()=>{window.preflightCopyObserved.push(...Array.from(document.querySelectorAll('.pdf-status p, .preflight-shell button'),element=>element.textContent))};
+          new MutationObserver(record).observe(document.querySelector('.preflight-shell'),{subtree:true,childList:true,characterData:true});
+        });
         await page.getByRole('button',{name:'Run preflight'}).click();
         await page.getByText('What the selected PDF shows').waitFor({timeout:20000});
         assert.equal(await page.getByText('Requirement checks and safety review are separate.').isVisible(),true);
+        for(const copy of ['3 - Before inspection','4 - Plan','5 - Your approval','Automatic options','Page order and dimensions'])assert.equal(await page.getByText(copy,{exact:true}).isVisible(),true,'missing exact copy: '+copy);
+        await page.getByText('Page dimensions and rotations',{exact:true}).click();
+        assert.equal(await page.getByText('Page 1: 420.0 x 280.0 pt - 0 deg',{exact:true}).isVisible(),true);
         const metadata=page.getByLabel('Remove metadata and XMP');assert.equal(await metadata.isChecked(),false,'metadata must not be selected silently');
         const active=page.getByLabel('Remove JavaScript and dangerous active actions');assert.equal(await active.isChecked(),true,'required active-action fix should be proposed');
         await page.getByRole('button',{name:'Approve changes and create copy'}).click();
         await page.getByText('Actual output reinspection').waitFor({timeout:30000});
         assert.equal(await page.getByRole('link',{name:'Download preflight copy'}).isVisible(),true);
         assert.equal(await page.getByText('JavaScript / Launch actions').isVisible(),true);
+        assert.equal(await page.getByText('6 - After verification',{exact:true}).isVisible(),true);
+        assert.match(await page.locator('.preflight-after').innerText(),/\d+ before -> 0 after - Verified removed/);
+        const observed=await page.evaluate(()=>window.preflightCopyObserved);
+        for(const copy of ['Checking requirements and privacy-relevant PDF structures...','Checking PDF...','Applying approved changes, then reinspecting the actual output...','Applying and checking...'])assert.ok(observed.includes(copy),'missing exact progress copy: '+copy);
       }
       assert.equal(await page.locator('body').evaluate(element=>element.scrollWidth<=element.clientWidth+1),true,scenario.name+' overflow after render');
       await context.close();

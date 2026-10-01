@@ -19,7 +19,7 @@ function notCheckedSafety(reason: string): PreflightSafetyItem[] {
     ["attachments", "Embedded files"], ["external-links", "External URI links"],
     ["comments", "Comments and review marks"], ["hidden-text", "Searchable or invisible text signals"],
   ];
-  return items.map(([key, label]) => ({ key, label, checked: false, summary: "Not checked  " + reason }));
+  return items.map(([key, label]) => ({ key, label, checked: false, summary: "Not checked - " + reason }));
 }
 function safetyFromPrivacy(inspection: PrivacyInspection): PreflightSafetyItem[] {
   const groups = groupPrivacyFindings(inspection);
@@ -41,10 +41,10 @@ function encryptedResult(file: File, requirements: PreflightRequirements): Prefl
   const checks: PreflightCheck[] = [
     { key: "file-size", label: "Maximum file size", state: maximumBytes ? (file.size <= maximumBytes ? "pass" : "fail") : "not-checked",
       summary: maximumBytes ? (file.size / 1024 / 1024).toFixed(2) + " MB against " + requirements.maximumSizeMb + " MB." : "No maximum selected." },
-    { key: "page-count", label: "Maximum page count", state: "not-checked", summary: "Not checked  the encrypted PDF could not be opened." },
-    { key: "page-size", label: "Required page size", state: "not-checked", summary: "Not checked  the encrypted PDF could not be opened." },
+    { key: "page-count", label: "Maximum page count", state: "not-checked", summary: "Not checked - the encrypted PDF could not be opened." },
+    { key: "page-size", label: "Required page size", state: "not-checked", summary: "Not checked - the encrypted PDF could not be opened." },
     { key: "encryption", label: "No encryption/password protection", state: "fail", summary: "Password protection or encryption detected." },
-    { key: "active-actions", label: "No JavaScript or dangerous actions", state: "not-checked", summary: "Not checked  the encrypted PDF could not receive privacy inspection." },
+    { key: "active-actions", label: "No JavaScript or dangerous actions", state: "not-checked", summary: "Not checked - the encrypted PDF could not receive privacy inspection." },
   ];
   return { filename: file.name, fileSize: file.size, pageSizes: [], requirements, checks, safety: notCheckedSafety(reason), privacyUnavailableReason: reason, signed: null };
 }
@@ -85,7 +85,7 @@ export async function inspectPdfPreflight(file: File, requirements: PreflightReq
     { key: "encryption", label: "No encryption/password protection", state: "pass", summary: "The PDF opened without a password." },
     { key: "active-actions", label: "No JavaScript or dangerous actions",
       state: !requirements.disallowActiveActions ? "not-checked" : activeCount === undefined ? "not-checked" : activeCount ? (signed ? "needs-decision" : "can-fix") : "pass",
-      summary: !requirements.disallowActiveActions ? "This requirement is turned off." : activeCount === undefined ? "Not checked  " + privacyUnavailableReason + "." : activeCount ? activeCount + " dangerous active-action finding(s)." + (signed ? " Signed PDFs are not rewritten automatically." : " Existing sanitization can remove and verify them.") : "No dangerous active actions detected by the bounded inspection." },
+      summary: !requirements.disallowActiveActions ? "This requirement is turned off." : activeCount === undefined ? "Not checked - " + privacyUnavailableReason + "." : activeCount ? activeCount + " dangerous active-action finding(s)." + (signed ? " Signed PDFs are not rewritten automatically." : " Existing sanitization can remove and verify them.") : "No dangerous active actions detected by the bounded inspection." },
   ];
   return {
     filename: file.name, fileSize: file.size, pageCount: pages.length, pageSizes, requirements, checks,

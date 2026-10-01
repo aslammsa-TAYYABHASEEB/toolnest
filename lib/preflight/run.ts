@@ -32,7 +32,7 @@ export async function runApprovedPreflight(
     changed = true;
     for (const step of result.steps) steps.push({
       key: "privacy", label: step.title, status: step.status,
-      summary: step.beforeCount + " before � " + step.afterCount + " after",
+      summary: step.beforeCount + " before -> " + step.afterCount + " after",
     });
   }
   let compression: PreflightRunResult["compression"];

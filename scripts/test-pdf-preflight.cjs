@@ -35,6 +35,13 @@ const requirements=overrides=>({requiredPageSize:'letter',disallowActiveActions:
 const approval=overrides=>({removeActiveActions:false,removeMetadata:false,removeAttachments:false,removeExternalLinks:false,removeComments:false,tryStructureOptimization:false,...overrides});
 
 (async()=>{
+  const productionFiles=['components/pdf-preflight.tsx','lib/preflight/inspect.ts','lib/preflight/plan.ts','lib/preflight/run.ts','lib/preflight/types.ts','app/tools/pdf-preflight/page.tsx'];
+  for(const filename of productionFiles){
+    const source=fs.readFileSync(path.resolve(filename),'utf8');
+    assert.equal((source.match(/\uFFFD/g)||[]).length,0,filename+' contains a replacement character');
+    assert.equal((source.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g)||[]).length,0,filename+' contains an unexpected C0 control character');
+  }
+  console.log('PASS: all six Preflight production files have zero replacement and unexpected C0 characters');
   const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');pdfjs.GlobalWorkerOptions.workerSrc=pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')).href;
   openRenderer=async file=>pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,useWorkerFetch:false}).promise;
   inspectWithRenderer=file=>inspectPdfPrivacy(file,openRenderer);

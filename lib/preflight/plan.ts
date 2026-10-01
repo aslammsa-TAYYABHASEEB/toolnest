@@ -17,7 +17,7 @@ export function buildPreflightPlan(inspection: PreflightInspection): PreflightPl
     passed: byState("pass"),
     canFix: byState("can-fix"),
     needsDecision: [...byState("fail"), ...byState("needs-decision"), ...optional],
-    willNotChange: ["Page content and dimensions", "Form fields and stored values", "Internal page destinations"],
+    willNotChange: ["Page order and dimensions", "Form fields and stored values", "Internal page destinations"],
     notChecked: [...byState("not-checked"), ...inspection.safety.filter(item => !item.checked).map(item => item.label)],
   };
 }
