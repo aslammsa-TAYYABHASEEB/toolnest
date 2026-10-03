@@ -2,7 +2,7 @@ import { BATCH_LIMITS, type Source } from "./types";
 import { normalizeText } from "./normalization";
 
 /** RFC-style comma/quote grammar. Physical start lines survive multiline cells. */
-export function parseCsvSource(bytes: Uint8Array, keyColumn: number): Source {
+export function parseCsvTable(bytes: Uint8Array) {
   if (!bytes.length || bytes.length > BATCH_LIMITS.csvBytes) throw new Error("CSV byte limit");
   const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   const rows: { physicalRow: number; cells: string[] }[] = [];
@@ -26,6 +26,12 @@ export function parseCsvSource(bytes: Uint8Array, keyColumn: number): Source {
   if (rows.length < 2) throw new Error("CSV requires headers and records");
   const headers = rows.shift()!.cells;
   if (headers.some(header => !normalizeText(header)) || new Set(headers.map(normalizeText)).size !== headers.length) throw new Error("Invalid CSV headers");
+  if (rows.some(row => row.cells.length !== headers.length)) throw new Error("CSV row width mismatch");
+  return Object.freeze({ headers: Object.freeze(headers), rows: Object.freeze(rows.map(row => Object.freeze({ ...row, cells: Object.freeze(row.cells) }))) });
+}
+
+export function parseCsvSource(bytes: Uint8Array, keyColumn: number): Source {
+  const { headers, rows } = parseCsvTable(bytes);
   if (!Number.isInteger(keyColumn) || keyColumn < 0 || keyColumn >= headers.length) throw new Error("Invalid key column");
   const keys = new Set<string>();
   const records = rows.map(row => {

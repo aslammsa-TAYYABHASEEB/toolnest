@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test:batch-verification": "node scripts/test-batch-verification.cjs && node scripts/test-batch-verification-production.cjs",
+    "test:batch-verification-browser": "node scripts/test-batch-verification-browser.cjs",
     "test:pdf-redaction": "node scripts/test-pdf-redaction.cjs",
     "test:pdf-redaction-browser": "node scripts/test-pdf-redaction-browser.cjs",
     "test:pdf-to-word": "node scripts/test-pdf-to-word.cjs && node scripts/test-ocr-word.cjs && node scripts/test-ocr-orientation.cjs",

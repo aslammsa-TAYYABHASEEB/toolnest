@@ -4,13 +4,17 @@ import { constructSpans } from "./text-spans";
 import { BATCH_LIMITS, type Item, type PdfEvidence, type PageEvidence, type RendererOpener } from "./types";
 
 /** No OCR and no table reconstruction. Evidence is item-level, not invented glyph boxes. */
-export async function extractBatchPdfEvidence(file: File, open: RendererOpener = loadPdfRendererDocument): Promise<PdfEvidence> {
+export async function extractBatchPdfEvidence(file: File, open: RendererOpener = loadPdfRendererDocument,
+  context: { signal?: AbortSignal; onPage?: (page: number) => void } = {}): Promise<PdfEvidence> {
+  const current = () => { if (context.signal?.aborted) throw new Error("Verification cancelled"); };
+  current();
   if (file.size > BATCH_LIMITS.pdfBytes) throw new Error("PDF byte limit");
   const doc = await open(file), pages: PageEvidence[] = [];
   let characters = 0;
   try {
     if (!doc.numPages || doc.numPages > BATCH_LIMITS.pages) throw new Error("PDF page limit");
     for (let number = 1; number <= doc.numPages; number++) {
+      current(); context.onPage?.(number);
       const page = await doc.getPage(number);
       try {
         const text = await page.getTextContent({ disableNormalization: true }), display = page.getViewport({ scale: 1 }), layout = page.getViewport({ scale: 1, rotation: 0 });
@@ -44,8 +48,10 @@ export async function extractBatchPdfEvidence(file: File, open: RendererOpener =
       } finally { page.cleanup(); }
     }
   } finally { await doc.loadingTask.destroy(); }
+  current();
   try {
     const privacy = await inspectPdfPrivacy(file, open);
+    current();
     const categories = new Set(["hidden-text", "redaction-risk", "optional-content"]);
     // Keep the inspector's known scope disclaimer; any other incomplete inspection blocks PASS.
     const incomplete = privacy.warnings.some(w => w !== "This is a structural inspection, not a forensic or verified-clean certificate. Encrypted and proprietary PDFs are not fully supported.");
@@ -53,6 +59,7 @@ export async function extractBatchPdfEvidence(file: File, open: RendererOpener =
       visibilityReview: page.visibilityReview || incomplete || privacy.findings.some(f => categories.has(f.category) && (!f.page || f.page === page.page)) }))),
       limitations: Object.freeze(["PASS compares extracted native text under the one-record-per-page/anchored-line contract; it is not proof of visual visibility.", ...privacy.warnings]) });
   } catch {
+    current();
     return Object.freeze({ pages: Object.freeze(pages.map(page => Object.freeze({ ...page, visibilityReview: true }))),
       limitations: Object.freeze(["Visibility inspection unavailable; no source record may PASS."]) });
   }
