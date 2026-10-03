@@ -13,6 +13,20 @@ export async function extractBatchPdfEvidence(file: File, open: RendererOpener =
   let characters = 0;
   try {
     if (!doc.numPages || doc.numPages > BATCH_LIMITS.pages) throw new Error("PDF page limit");
+    const { OPS } = await import("pdfjs-dist");
+    // Fail closed: only known state/setup instructions prove absence of painting.
+    // Paths, text-showing, images, annotations, groups and unknown instructions do not.
+    const nonPainting = new Set<number>([
+      OPS.dependency, OPS.save, OPS.restore, OPS.transform,
+      OPS.setLineWidth, OPS.setLineCap, OPS.setLineJoin, OPS.setMiterLimit, OPS.setDash,
+      OPS.setRenderingIntent, OPS.setFlatness,
+      OPS.beginText, OPS.endText, OPS.setCharSpacing, OPS.setWordSpacing, OPS.setHScale,
+      OPS.setLeading, OPS.setFont, OPS.setTextRenderingMode, OPS.setTextRise,
+      OPS.moveText, OPS.setLeadingMoveText, OPS.setTextMatrix, OPS.nextLine,
+      OPS.setStrokeColorSpace, OPS.setFillColorSpace, OPS.setStrokeColor, OPS.setFillColor,
+      OPS.setStrokeGray, OPS.setFillGray, OPS.setStrokeRGBColor, OPS.setFillRGBColor,
+      OPS.setStrokeCMYKColor, OPS.setFillCMYKColor, OPS.setStrokeTransparent, OPS.setFillTransparent,
+    ]);
     for (let number = 1; number <= doc.numPages; number++) {
       current(); context.onPage?.(number);
       const page = await doc.getPage(number);
@@ -39,9 +53,11 @@ export async function extractBatchPdfEvidence(file: File, open: RendererOpener =
             x: lx, y: ly, advance: width * layout.scale * (page.userUnit || 1), size: size * layout.scale * (page.userUnit || 1),
             box: Object.freeze({ left, top, width: right-left, height: bottom-top }) }));
         }
-        // An empty text layer alone cannot prove a blank page (it may be a scan).
+        // Check raw text too: hidden/off-page/unsupported items must not become blank
+        // just because usable evidence extraction excluded them.
         const operators = await page.getOperatorList();
-        const blank = !items.some(item => item.text.trim()) && operators.fnArray.length === 0;
+        const blank = !text.items.some(item => "str" in item && item.str.trim())
+          && operators.fnArray.every(operator => nonPainting.has(operator));
         pages.push(Object.freeze({ page: number, width: display.width, height: display.height, rotation: page.rotate,
           rawItems: Object.freeze(text.items.map(item => Object.freeze({ ...item, ...("transform" in item ? { transform: Object.freeze([...item.transform]) } : {}) }))),
           items: Object.freeze(items), spans: Object.freeze(constructSpans(items)), warnings: Object.freeze(warnings), visibilityReview: warnings.length > 0, blank }));
