@@ -37,7 +37,7 @@ function rendererError(caught: unknown, filename: string) {
   );
 }
 
-export async function loadPdfRendererDocument(file: File) {
+export async function loadPdfRendererDocument(file: File, options: { stopAtErrors?: boolean } = {}) {
   assertPdfRenderingSupport();
   validatePdfFile(file);
   validatePdfTotalSize([file]);
@@ -54,6 +54,7 @@ export async function loadPdfRendererDocument(file: File) {
       enableScripting: false,
       isEvalSupported: false,
       useWorkerFetch: false,
+      ...(options.stopAtErrors ? { stopAtErrors: true } : {}),
     };
     const loadingTask = pdfjs.getDocument(loadingOptions);
     return await loadingTask.promise;

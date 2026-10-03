@@ -1,6 +1,40 @@
 @import "tailwindcss";
 @import "./tokens.css";
 
+/* Feature-scoped PDF redaction workspace. Static disclosures have no success styling. */
+.redaction-shell { display: grid; gap: var(--space-5); min-width: 0; }
+.redaction-disclosure, .redaction-notice, .redaction-review, .redaction-success { padding: var(--space-6); }
+.redaction-disclosure h2, .redaction-review h3, .redaction-success h3 { margin: .4rem 0 .75rem; font-size: var(--text-xl); line-height: 1.4; }
+.redaction-disclosure p, .redaction-review p, .redaction-success p, .redaction-notice p { color: var(--color-text-muted); margin: .5rem 0; }
+.redaction-disclosure small, .redaction-file-row small, .redaction-action-row small { color: var(--color-text-muted); }
+.redaction-notice { border-color: var(--color-border-strong); }
+.redaction-file-row, .redaction-toolbar, .redaction-edit-actions, .redaction-action-row, .redaction-processing { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
+.redaction-file-row > span { min-width: 0; display: grid; overflow-wrap: anywhere; }
+.redaction-editor { display: grid; gap: var(--space-3); min-width: 0; }
+.redaction-toolbar, .redaction-edit-actions { padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.redaction-navigation, .redaction-review-pages { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.redaction-toolbar label { display: inline-flex; align-items: center; gap: .4rem; font-size: var(--text-sm); }
+.redaction-toolbar select { border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: .45rem; background: var(--color-surface); color: var(--color-text); }
+.redaction-instructions { margin: 0; color: var(--color-text-muted); font-size: var(--text-sm); }
+.redaction-scroll { min-width: 0; max-height: 72vh; overflow: auto; padding: 1rem; background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.redaction-page { position: relative; margin-inline: auto; background: #fff; box-shadow: var(--shadow-md); touch-action: none; cursor: crosshair; flex-shrink: 0; }
+.redaction-page.is-busy { cursor: wait; }
+.redaction-page canvas { display: block; width: 100%; height: 100%; }
+.redaction-preview-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #172033; background: #fff; }
+.redaction-mark, .redaction-draft { position: absolute; margin: 0; padding: 0; border: 2px solid #e14956; background: rgba(0,0,0,.86); color: #fff; border-radius: 0; cursor: move; }
+.redaction-mark.is-selected { border-color: #5b4cf0; outline: 2px solid #fff; outline-offset: 0; }
+.redaction-mark > span { position: absolute; left: 0; top: 0; padding: 0 .2rem; background: #172033; font-size: .65rem; line-height: 1.2; }
+.redaction-mark > i { position: absolute; width: 12px; height: 12px; right: -5px; bottom: -5px; border: 2px solid #fff; background: #5b4cf0; cursor: nwse-resize; }
+.redaction-draft { pointer-events: none; }
+.redaction-edit-actions > span { margin-right: auto; font-size: var(--text-sm); color: var(--color-text-muted); }
+.redaction-confirm { display: flex; align-items: flex-start; gap: .65rem; padding-block: var(--space-4); }
+.redaction-confirm input { margin-top: .4rem; accent-color: var(--color-brand-500); }
+.redaction-action-row { justify-content: flex-start; }
+.redaction-success { border-color: var(--color-success-500); }
+.redaction-success .kicker { color: var(--color-success-500); }
+.redaction-success details { margin-block: var(--space-4); color: var(--color-text-muted); }
+.redaction-processing { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-behavior: smooth; background: var(--color-bg); }
 body { min-width: 320px; margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); line-height: var(--leading-normal); text-rendering: optimizeLegibility; }
